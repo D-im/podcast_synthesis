@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Podcast Synthesis</title></head>
+<body>
+<h1>Podcast Synthesis</h1>
+{% if warnings %}
+<h2>Startup warnings</h2>
+<ul>
+{% for w in warnings %}<li>{{ w }}</li>
+{% endfor %}</ul>
+{% else %}
+<p>All prerequisites present.</p>
+{% endif %}
+</body>
+</html>

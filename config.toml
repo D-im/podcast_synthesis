@@ -1,0 +1,17 @@
+port = 8765
+daily_cap_usd = 5.0
+token_limit = 150000
+
+[providers]
+transcriber = "assemblyai"
+summarizer = "anthropic"
+verifier = "openai"
+
+[models]
+transcriber = "universal-3.5-pro"
+summarizer = "claude-sonnet-5-5"
+verifier = "gpt-6.1-sol"
+
+[fidelity]
+accuracy_threshold = 0.9
+coverage_threshold = 0.75
