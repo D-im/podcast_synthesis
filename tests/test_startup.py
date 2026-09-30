@@ -19,7 +19,10 @@ def test_fresh_start_creates_wal_db(tmp_path):
     p = db.bootstrap(d)
     assert p.exists()
     assert sqlite3.connect(p).execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-    assert sqlite3.connect(p).execute("select count(*) from sqlite_master").fetchone()[0] == 0
+    tables = sqlite3.connect(p).execute(
+        "select name from sqlite_master where type='table' order by name"
+    ).fetchall()
+    assert tables == [("episodes",), ("jobs",), ("steps",)]
     assert TestClient(create_app([])).get("/").status_code == 200
 
 

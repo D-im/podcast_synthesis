@@ -34,4 +34,4 @@ def run() -> None:
     warnings = collect_warnings()
     for w in warnings:
         print(f"WARNING: {w}")
-    uvicorn.run(create_app(warnings), host=HOST, port=config.port)
+    uvicorn.run(create_app(warnings, db.DEFAULT_DATA_DIR), host=HOST, port=config.port)

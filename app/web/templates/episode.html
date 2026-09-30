@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Episode {{ episode.video_id }}</title></head>
+<body>
+<p><a href="/">Submit another link</a></p>
+<h1>{{ episode.title or episode.video_id }}</h1>
+<p>Source: {{ episode.url }}</p>
+{% if job %}
+<p>Job status: <strong>{{ job.state }}</strong></p>
+<ol>
+{% for s in job.steps %}<li>{{ s.name }}: {{ s.state }}</li>
+{% endfor %}</ol>
+{% endif %}
+</body>
+</html>

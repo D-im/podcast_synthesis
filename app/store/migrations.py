@@ -1,0 +1,58 @@
+"""Numbered migrations, tracked with PRAGMA user_version."""
+from __future__ import annotations
+
+import sqlite3
+
+MIGRATIONS: list[list[str]] = [
+    # 1: first tables
+    [
+        """CREATE TABLE episodes (
+            video_id TEXT PRIMARY KEY,
+            url TEXT NOT NULL,
+            title TEXT,
+            duration_seconds INTEGER,
+            created_at TEXT NOT NULL
+        )""",
+        """CREATE TABLE jobs (
+            id INTEGER PRIMARY KEY,
+            video_id TEXT NOT NULL REFERENCES episodes(video_id),
+            state TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )""",
+        """CREATE TABLE steps (
+            job_id INTEGER NOT NULL REFERENCES jobs(id),
+            name TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            state TEXT NOT NULL,
+            PRIMARY KEY (job_id, name)
+        )""",
+    ],
+]
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Apply pending migrations; each one is atomic with its version bump."""
+    current = conn.execute("PRAGMA user_version").fetchone()[0]
+    if current > len(MIGRATIONS):
+        raise RuntimeError(
+            f"database schema version {current} is newer than this app knows "
+            f"({len(MIGRATIONS)}); update the app or use a matching data folder"
+        )
+    for version, statements in enumerate(MIGRATIONS, start=1):
+        if version <= current:
+            continue
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            # re-check under the write lock in case another process migrated
+            if conn.execute("PRAGMA user_version").fetchone()[0] >= version:
+                conn.execute("ROLLBACK")
+                continue
+            for stmt in statements:
+                conn.execute(stmt)
+            conn.execute(f"PRAGMA user_version = {version}")
+            conn.execute("COMMIT")
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
