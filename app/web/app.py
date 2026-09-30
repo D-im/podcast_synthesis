@@ -7,7 +7,7 @@ from urllib.parse import parse_qs
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -15,6 +15,7 @@ from app.core import submit as core_submit
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
 from app.ports import OnePager, Transcript
 from app.store import artifacts, db, episodes, spend
+from app.web.library import build_library, local_datetime
 from app.web.status import describe_job, describe_spend, format_timestamp
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -39,18 +40,24 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             return f"Today: unavailable (cap {cap_text})"
 
     def home_response(request: Request, status_code: int = 200, error: str | None = None,
-                      url: str = ""):
+                      url: str = "", q: str | None = None):
+        try:
+            with closing(db.connect(data_dir)) as conn:
+                library = build_library(conn, data_dir, q)
+            library["unavailable"] = False
+        except (sqlite3.Error, OSError, RuntimeError, KeyError, TypeError, ValueError):
+            library = {"query": "", "rows": [], "truncated": False, "unavailable": True}
         return TEMPLATES.TemplateResponse(
             request,
             "home.html",
             {"warnings": warnings, "error": error, "url": url,
-             "today_spend": today_spend()},
+             "library": library, "today_spend": today_spend()},
             status_code=status_code,
         )
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
-        return home_response(request)
+        return home_response(request, q=request.query_params.get("q"))
 
     @app.post("/submit")
     async def submit(request: Request):
@@ -84,6 +91,15 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         if episode is None:
             raise HTTPException(status_code=404, detail="Episode not found")
         status = describe_job(episode, job, cost)
+        status["date"] = local_datetime(episode["created_at"])
+        status["audio_ready"] = False
+        try:
+            status["audio_ready"] = artifacts.exists(
+                artifacts.artifact_path(data_dir, video_id, artifacts.AUDIO))
+        except ValueError:
+            pass
+        status["verdict"] = None   # filled by Epic 2
+        status["fidelity"] = None  # filled by Epic 2
         status["one_pager"] = None
         status["one_pager_error"] = None
         summarized = any(s["name"] == "summarize" and s["state"] == "done"
@@ -120,6 +136,21 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         )
         response.headers["Cache-Control"] = "no-store"  # never reuse a stale poll
         return response
+
+    @app.get("/episodes/{video_id}/audio")
+    def audio(video_id: str):
+        try:
+            path = artifacts.artifact_path(data_dir, video_id, artifacts.AUDIO)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Audio not found") from None
+        if not artifacts.exists(path):
+            raise HTTPException(status_code=404, detail="Audio not found")
+        try:
+            # inline so the page's <audio> plays it; the link's `download` attribute saves it
+            return FileResponse(path, media_type="audio/mp4", filename=f"{video_id}.m4a",
+                                content_disposition_type="inline")
+        except OSError:
+            raise HTTPException(status_code=404, detail="Audio not found") from None
 
     @app.get("/episodes/{video_id}/transcript", response_class=HTMLResponse)
     def transcript_page(request: Request, video_id: str):

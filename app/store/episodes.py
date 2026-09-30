@@ -176,3 +176,45 @@ def add_one_pager_version(
         "VALUES (?, ?, ?, ?, ?)",
         (video_id, version, _now(), model, json.dumps(prompt_hashes, sort_keys=True)),
     )
+
+
+def list_episodes(conn: sqlite3.Connection, limit: int | None = None) -> list[dict]:
+    """Episodes newest first, each with its latest Job (and steps) and latest One-Pager version.
+
+    Each item: the `get_episode` keys plus `job` (as `get_latest_job_with_steps`, or None)
+    and `one_pager_version` (int or None).
+    """
+    sql = (
+        "SELECT e.video_id, e.url, e.title, e.duration_seconds, e.created_at, "
+        "(SELECT MAX(version) FROM one_pager_versions o WHERE o.video_id = e.video_id) "
+        "FROM episodes e ORDER BY e.created_at DESC, e.rowid DESC"
+    )
+    params: tuple = ()
+    if limit is not None:
+        sql += " LIMIT ?"
+        params = (int(limit),)
+    rows = conn.execute(sql, params).fetchall()
+    keys = ("video_id", "url", "title", "duration_seconds", "created_at")
+    items = [dict(zip(keys, r[:5]), one_pager_version=r[5], job=None) for r in rows]
+    if not items:
+        return items
+    by_id = {i["video_id"]: i for i in items}
+    jobs = conn.execute(
+        "SELECT j.video_id, j.id, j.state, j.created_at, j.updated_at FROM jobs j "
+        "WHERE j.id = (SELECT MAX(id) FROM jobs k WHERE k.video_id = j.video_id)"
+    ).fetchall()
+    job_by_id = {}
+    for video_id, jid, state, created, updated in jobs:
+        if video_id in by_id:
+            job = {"id": jid, "state": state, "created_at": created,
+                   "updated_at": updated, "steps": []}
+            by_id[video_id]["job"] = job
+            job_by_id[jid] = job
+    steps = conn.execute(
+        "SELECT job_id, name, ordinal, state, message, retryable FROM steps ORDER BY ordinal"
+    ).fetchall()
+    for jid, n, o, s, m, r in steps:
+        if jid in job_by_id:
+            job_by_id[jid]["steps"].append(
+                {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r})
+    return items

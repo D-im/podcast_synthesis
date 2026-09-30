@@ -2,6 +2,6 @@
 {% block title %}Episode {{ episode.video_id }}{% endblock %}
 {% block head %}<script src="/static/htmx.min.js"></script>{% endblock %}
 {% block content %}<p><a href="/">Submit another link</a></p>
-<p>Source: {{ episode.url }}</p>
+<p>Source: {% if episode.url.startswith(("http://", "https://")) %}<a href="{{ episode.url }}">{{ episode.url }}</a>{% else %}{{ episode.url }}{% endif %}</p>
 {% include "_status.html" %}
 {% endblock %}

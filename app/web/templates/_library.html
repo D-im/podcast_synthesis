@@ -1,0 +1,14 @@
+<section id="library">
+<h2>Library</h2>
+<form method="get" action="/">
+<label>Search <input type="text" name="q" value="{{ library.query }}" size="40" maxlength="200"></label>
+<button type="submit">Search</button>
+</form>
+{% if library.unavailable %}<p role="alert">The library is unavailable right now.</p>
+{% elif not library.rows %}{% if library.query %}<p>No Episodes match '{{ library.query }}'.</p>
+{% else %}<p>No Episodes yet.</p>
+{% endif %}{% else %}<ul>
+{% for r in library.rows %}<li><a href="/episodes/{{ r.video_id }}">{{ r.title }}</a> - {{ r.date }} - {{ r.status }}{% if r.verdict %} - {{ r.verdict }}{% endif %}{% if r.fidelity %} - {{ r.fidelity }}{% endif %}{% if r.snippet %}<br><small>{{ r.snippet }}</small>{% endif %}</li>
+{% endfor %}</ul>
+{% if library.truncated %}<p>Showing the first 200 matches; narrow your search to see others.</p>
+{% endif %}{% endif %}</section>
