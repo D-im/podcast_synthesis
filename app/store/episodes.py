@@ -71,7 +71,8 @@ def get_latest_job_with_steps(conn: sqlite3.Connection, video_id: str) -> dict |
     if job is None:
         return None
     steps = conn.execute(
-        "SELECT name, ordinal, state FROM steps WHERE job_id = ? ORDER BY ordinal",
+        "SELECT name, ordinal, state, message, retryable FROM steps "
+        "WHERE job_id = ? ORDER BY ordinal",
         (job[0],),
     ).fetchall()
     return {
@@ -79,5 +80,57 @@ def get_latest_job_with_steps(conn: sqlite3.Connection, video_id: str) -> dict |
         "state": job[1],
         "created_at": job[2],
         "updated_at": job[3],
-        "steps": [{"name": n, "ordinal": o, "state": s} for n, o, s in steps],
+        "steps": [
+            {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r}
+            for n, o, s, m, r in steps
+        ],
     }
+
+
+def next_queued_job(conn: sqlite3.Connection) -> dict | None:
+    """Oldest queued Job (by id), with its Episode URL."""
+    row = conn.execute(
+        "SELECT j.id, j.video_id, e.url FROM jobs j JOIN episodes e USING (video_id) "
+        "WHERE j.state = 'queued' ORDER BY j.id LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    return {"id": row[0], "video_id": row[1], "url": row[2]}
+
+
+def set_job_state(conn: sqlite3.Connection, job_id: int, state: str) -> None:
+    conn.execute(
+        "UPDATE jobs SET state = ?, updated_at = ? WHERE id = ?", (state, _now(), job_id)
+    )
+
+
+def get_steps(conn: sqlite3.Connection, job_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT name, ordinal, state, message, retryable FROM steps "
+        "WHERE job_id = ? ORDER BY ordinal",
+        (job_id,),
+    ).fetchall()
+    return [
+        {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r}
+        for n, o, s, m, r in rows
+    ]
+
+
+def set_step_state(
+    conn: sqlite3.Connection, job_id: int, name: str, state: str,
+    message: str | None = None, retryable: bool | None = None,
+) -> None:
+    conn.execute(
+        "UPDATE steps SET state = ?, message = ?, retryable = ? "
+        "WHERE job_id = ? AND name = ?",
+        (state, message, None if retryable is None else int(retryable), job_id, name),
+    )
+
+
+def set_episode_metadata(
+    conn: sqlite3.Connection, video_id: str, title: str, duration_seconds: int
+) -> None:
+    conn.execute(
+        "UPDATE episodes SET title = ?, duration_seconds = ? WHERE video_id = ?",
+        (title, duration_seconds, video_id),
+    )

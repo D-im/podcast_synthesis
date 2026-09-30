@@ -129,7 +129,8 @@ def _config_text(**over):
         ("token_limit = 150000", "token_limit = 0", "token_limit"),
         ("accuracy_threshold = 0.9", "accuracy_threshold = 1.5", "accuracy_threshold"),
         ("coverage_threshold = 0.75", "coverage_threshold = -0.1", "coverage_threshold"),
-        ('verifier = "openai"', "", "verifier"),
+        ('verifier = "fake"', "", "verifier"),
+        ('downloader = "fake"', "", "downloader"),
         ('summarizer = "claude-sonnet-5-5"', "", "summarizer"),
         ('transcriber = "universal-3.5-pro"', 'transcriber = ""', "transcriber"),
         ("[fidelity]", "[fidelity_x]", "fidelity"),
@@ -145,7 +146,7 @@ def test_invalid_config_values_name_the_key(tmp_path, old, new, key):
 def test_valid_config_fields():
     c = load_config(GOOD)
     assert c.daily_cap_usd == 5.0 and c.token_limit > 0
-    assert set(c.providers) >= {"transcriber", "summarizer", "verifier"}
+    assert set(c.providers) >= {"downloader", "transcriber", "summarizer", "verifier"}
     assert set(c.models) >= {"transcriber", "summarizer", "verifier"}
     assert 0 <= c.accuracy_threshold <= 1 and 0 <= c.coverage_threshold <= 1
 
@@ -165,6 +166,7 @@ def _run_with(monkeypatch, tmp_path, tools=(), env_loader=None):
     monkeypatch.setattr(main.uvicorn, "run", lambda app, **kw: calls.update(kw, app=app))
     real = db.bootstrap
     monkeypatch.setattr(main.db, "bootstrap", lambda: real(tmp_path))
+    monkeypatch.setattr(main.db, "DEFAULT_DATA_DIR", tmp_path)
     monkeypatch.setattr(main.checks, "check_tools", lambda path=None: list(tools))
     monkeypatch.setattr(main, "load_config", lambda: load_config(GOOD))
     monkeypatch.setattr(main.env, "load_env", env_loader or (lambda: None))
@@ -202,6 +204,69 @@ def test_run_loads_env_before_computing_warnings(monkeypatch, tmp_path, capsys):
 
     _run_with(monkeypatch, tmp_path, env_loader=loader)
     assert "Missing API key" not in capsys.readouterr().out
+
+
+def _run_wiring(monkeypatch, tmp_path, config_path=GOOD, serve=None):
+    workers = []
+    real_worker = main.Worker
+
+    def capture(*a, **k):
+        w = real_worker(*a, **k)
+        workers.append(w)
+        return w
+
+    monkeypatch.setattr(main, "Worker", capture)
+    monkeypatch.setattr(main.uvicorn, "run", serve or (lambda app, **kw: None))
+    real = db.bootstrap
+    monkeypatch.setattr(main.db, "bootstrap", lambda: real(tmp_path))
+    monkeypatch.setattr(main.db, "DEFAULT_DATA_DIR", tmp_path)
+    monkeypatch.setattr(main.checks, "check_tools", lambda path=None: [])
+    monkeypatch.setattr(main, "load_config", lambda: load_config(config_path))
+    monkeypatch.setattr(main.env, "load_env", lambda: None)
+    return workers
+
+
+def test_run_starts_worker_that_processes_jobs_and_stops_it(monkeypatch, tmp_path):
+    import time
+    from contextlib import closing
+    from app.core import submit as core_submit
+    from app.store import episodes
+
+    def serve(app, **kw):
+        with closing(db.connect(tmp_path)) as c:
+            core_submit.submit(c, "https://youtu.be/dQw4w9WgXcQ")
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            with closing(db.connect(tmp_path)) as c:
+                j = episodes.get_latest_job_with_steps(c, "dQw4w9WgXcQ")
+            if j["state"] == "done":
+                return
+            time.sleep(0.05)
+        raise AssertionError("job never finished")
+
+    workers = _run_wiring(monkeypatch, tmp_path, serve=serve)
+    main.run()
+    assert workers and workers[0]._thread is None  # stopped
+
+
+def test_run_stops_worker_when_server_raises(monkeypatch, tmp_path):
+    def serve(app, **kw):
+        raise RuntimeError("server died")
+
+    workers = _run_wiring(monkeypatch, tmp_path, serve=serve)
+    with pytest.raises(RuntimeError):
+        main.run()
+    assert workers[0]._thread is None
+
+
+def test_run_exits_with_message_for_unavailable_provider(monkeypatch, tmp_path, capsys):
+    bad = tmp_path / "config.toml"
+    bad.write_text(GOOD.read_text().replace('transcriber = "fake"', 'transcriber = "assemblyai"'))
+    _run_wiring(monkeypatch, tmp_path, config_path=bad)
+    with pytest.raises(SystemExit) as e:
+        main.run()
+    assert e.value.code == 1
+    assert "Configuration error" in capsys.readouterr().err
 
 
 def test_home_page_all_clear():

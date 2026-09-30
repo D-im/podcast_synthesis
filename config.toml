@@ -3,9 +3,10 @@ daily_cap_usd = 5.0
 token_limit = 150000
 
 [providers]
-transcriber = "assemblyai"
-summarizer = "anthropic"
-verifier = "openai"
+downloader = "fake"      # real: "yt-dlp"
+transcriber = "fake"     # real: "assemblyai"
+summarizer = "fake"      # real: "anthropic"
+verifier = "fake"        # real: "openai"
 
 [models]
 transcriber = "universal-3.5-pro"

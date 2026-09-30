@@ -9,6 +9,7 @@ from app import checks, env
 from app.config import ConfigError, load_config
 from app.store import db
 from app.web.app import create_app
+from app.worker import Worker, build_adapters
 
 HOST = "127.0.0.1"  # fixed: localhost only, no auth
 
@@ -34,4 +35,14 @@ def run() -> None:
     warnings = collect_warnings()
     for w in warnings:
         print(f"WARNING: {w}")
-    uvicorn.run(create_app(warnings, db.DEFAULT_DATA_DIR), host=HOST, port=config.port)
+    try:
+        adapters = build_adapters(config)
+    except ValueError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        raise SystemExit(1) from None
+    worker = Worker(db.DEFAULT_DATA_DIR, adapters)
+    worker.start()
+    try:
+        uvicorn.run(create_app(warnings, db.DEFAULT_DATA_DIR), host=HOST, port=config.port)
+    finally:
+        worker.stop()

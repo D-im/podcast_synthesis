@@ -130,12 +130,12 @@ def test_connection_pragmas(tmp_path):
 def test_migrations_idempotent_and_keep_data(tmp_path):
     db.bootstrap(tmp_path)
     c = db.connect(tmp_path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 2
     episodes.create_episode_with_job(c, VID, "u", ["download"])
     c.close()
     db.bootstrap(tmp_path)
     c = db.connect(tmp_path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 2
     assert c.execute("select count(*) from episodes").fetchone()[0] == 1
     c.close()
 
@@ -194,3 +194,22 @@ def test_submit_reports_503_when_database_unavailable(tmp_path, monkeypatch):
     r = client.post("/submit", data={"url": f"https://youtu.be/{VID}"})
     assert r.status_code == 503 and "try again" in r.text
     assert counts(tmp_path) == [0, 0, 0]
+
+
+def test_migration_2_upgrades_populated_v1_database(tmp_path):
+    from app.store import migrations
+    conn = sqlite3.connect(tmp_path / db.DB_NAME, isolation_level=None)
+    for stmt in migrations.MIGRATIONS[0]:
+        conn.execute(stmt)
+    conn.execute("PRAGMA user_version = 1")
+    conn.execute("INSERT INTO episodes (video_id, url, created_at) VALUES ('v', 'u', 'now')")
+    conn.execute("INSERT INTO jobs (id, video_id, state, created_at, updated_at) "
+                 "VALUES (1, 'v', 'queued', 'now', 'now')")
+    conn.execute("INSERT INTO steps (job_id, name, ordinal, state) VALUES (1, 'download', 1, 'pending')")
+    conn.close()
+    conn = db.connect(tmp_path)
+    migrations.migrate(conn)
+    job = episodes.get_latest_job_with_steps(conn, "v")
+    conn.close()
+    assert job["steps"] == [{"name": "download", "ordinal": 1, "state": "pending",
+                             "message": None, "retryable": None}]

@@ -28,6 +28,11 @@ MIGRATIONS: list[list[str]] = [
             PRIMARY KEY (job_id, name)
         )""",
     ],
+    # 2: failure details on steps
+    [
+        "ALTER TABLE steps ADD COLUMN message TEXT",
+        "ALTER TABLE steps ADD COLUMN retryable INTEGER",
+    ],
 ]
 
 

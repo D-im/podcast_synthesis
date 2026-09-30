@@ -1,0 +1,75 @@
+"""Composition root: wires adapters to ports by config name and runs Jobs serially."""
+from __future__ import annotations
+
+import logging
+import os
+import threading
+from contextlib import closing
+from pathlib import Path
+
+from app import env
+from app.adapters import fakes
+from app.config import Config
+from app.core import pipeline
+from app.ports import Adapters
+from app.store import db, episodes
+
+log = logging.getLogger(__name__)
+
+
+def build_adapters(config: Config, behavior: fakes.FakeBehavior | None = None) -> Adapters:
+    """Map provider names from config.toml to adapters. Only 'fake' exists so far."""
+    p = config.providers
+    for role in ("downloader", "transcriber", "summarizer"):
+        if p[role] != "fake":
+            raise ValueError(f"provider '{p[role]}' for {role} is not available yet")
+    if p["verifier"] not in ("fake", "none"):
+        raise ValueError(f"provider '{p['verifier']}' for verifier is not available yet")
+    return fakes.build_fakes(behavior, verifier=p["verifier"] == "fake")
+
+
+def configured_secrets() -> list[str]:
+    return [v for k in env.REQUIRED_KEYS if (v := os.environ.get(k))]
+
+
+class Worker:
+    def __init__(self, data_dir: Path, adapters: Adapters, poll_interval: float = 0.2,
+                 secrets=configured_secrets):
+        self.data_dir = Path(data_dir)
+        self.adapters = adapters
+        self.poll_interval = poll_interval
+        self.secrets = secrets
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def run_next(self) -> bool:
+        """Run the oldest queued Job, if any. Returns whether one ran."""
+        with closing(db.connect(self.data_dir)) as conn:
+            job = episodes.next_queued_job(conn)
+            if job is None:
+                return False
+            pipeline.run_job(conn, self.data_dir, job, self.adapters, self.secrets)
+            return True
+
+    def _loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                ran = self.run_next()
+            except Exception as e:  # never log the message: it could hold transcript text
+                log.error("worker error: %s", type(e).__name__)
+                ran = False
+            if not ran:
+                self._stop.wait(self.poll_interval)
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._loop, name="worker", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5)  # a long step must not hang shutdown
+            self._thread = None

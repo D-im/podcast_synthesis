@@ -34,14 +34,15 @@ def _num(data: dict, key: str, path: Path, kinds=(int, float)):
     return v
 
 
-ROLES = ("transcriber", "summarizer", "verifier")
+ROLES = ("downloader", "transcriber", "summarizer", "verifier")
+MODEL_ROLES = ("transcriber", "summarizer", "verifier")  # the downloader has no model
 
 
-def _str_table(data: dict, key: str, path: Path) -> dict[str, str]:
+def _str_table(data: dict, key: str, path: Path, roles=ROLES) -> dict[str, str]:
     t = data.get(key)
     if not isinstance(t, dict) or not t:
         raise ConfigError(f"{path}: missing or invalid table [{key}]")
-    for role in ROLES:
+    for role in roles:
         if role not in t:
             raise ConfigError(f"{path}: [{key}] is missing '{role}'")
     for k, v in t.items():
@@ -85,7 +86,7 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
         daily_cap_usd=cap,
         token_limit=limit,
         providers=_str_table(data, "providers", path),
-        models=_str_table(data, "models", path),
+        models=_str_table(data, "models", path, MODEL_ROLES),
         accuracy_threshold=acc,
         coverage_threshold=cov,
     )

@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-30-2026 13:08
-last_updated: 09-30-2026 13:45
+last_updated: 09-30-2026 13:55
 project: podcast_synthesis
 project_key: NOKEY
 tracking_system: file-system
@@ -38,7 +38,7 @@ development_status:
   epic-1: in-progress
   1-1-start-the-app-with-one-command: review
   1-2-submit-a-youtube-link: review
-  1-3-run-a-job-end-to-end-on-fake-providers: backlog
+  1-3-run-a-job-end-to-end-on-fake-providers: review
   1-4-watch-a-job-s-progress: backlog
   1-5-see-what-every-run-costs: backlog
   1-6-download-audio: backlog
