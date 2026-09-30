@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn",
     "jinja2",
     "python-dotenv",
+    "yt-dlp[default]==2026.8.19",
 ]
 
 [dependency-groups]
@@ -25,3 +26,4 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["network: real-network test, runs only with RUN_NETWORK_TESTS=1"]

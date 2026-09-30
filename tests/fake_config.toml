@@ -3,7 +3,7 @@ daily_cap_usd = 5.0
 token_limit = 150000
 
 [providers]
-downloader = "yt-dlp"    # or "fake"
+downloader = "fake"
 transcriber = "fake"     # real: "assemblyai"
 summarizer = "fake"      # real: "anthropic"
 verifier = "fake"        # real: "openai"

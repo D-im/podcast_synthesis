@@ -5,3 +5,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-start-the-app-with-one-command.md`
   summary: Decide SQLite `foreign_keys=ON` and `busy_timeout` when tables and the worker thread arrive (unverified, medium if real).
   evidence: Connections set only WAL now. Once the worker writes while web reads (Stories 1.2 and 1.3), missing busy timeout could surface as 'database is locked'.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-download-audio.md`
+  summary: Add a default-run test that exercises the real `yt_dlp.YoutubeDL` option set (outtmpl, m4a postprocessor, match_filter signature) against a local source instead of only the opt-in network test.
+  evidence: Every default test replaces yt-dlp with a fake that writes the expected file; a yt-dlp upgrade or option typo could break real downloads with a green offline suite.

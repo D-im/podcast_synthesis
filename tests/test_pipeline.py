@@ -15,6 +15,13 @@ from app.worker import Worker, build_adapters
 
 VID = "dQw4w9WgXcQ"
 VID2 = "aaaaaaaaaaa"
+FAKE_CONFIG = Path(__file__).parent / "fake_config.toml"
+
+
+def real_text():
+    return (PROJECT_ROOT / "config.toml").read_text()
+
+
 STEPS = ("download", "transcribe", "summarize", "verify")
 
 
@@ -150,8 +157,19 @@ def test_no_verifier_skips(data):
 
 
 def test_build_adapters_from_config():
-    a = build_adapters(load_config())
+    a = build_adapters(load_config(FAKE_CONFIG))
     assert a.verifier is not None
+
+
+def test_build_adapters_selects_ytdlp_and_rejects_unknown(tmp_path):
+    from app.adapters.ytdlp import YtDlpDownloader
+    real = load_config()
+    assert real.providers["downloader"] == "yt-dlp"
+    assert isinstance(build_adapters(real).downloader, YtDlpDownloader)
+    bad = tmp_path / "c.toml"
+    bad.write_text(real_text().replace('downloader = "yt-dlp"', 'downloader = "nope"'))
+    with pytest.raises(ValueError):
+        build_adapters(load_config(bad))
 
 
 def test_layering():

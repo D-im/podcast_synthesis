@@ -23,6 +23,10 @@ class Config:
     models: dict[str, str]
     accuracy_threshold: float
     coverage_threshold: float
+    js_runtime: str = "node"
+
+
+JS_RUNTIMES = ("node", "deno")
 
 
 def _num(data: dict, key: str, path: Path, kinds=(int, float)):
@@ -81,7 +85,14 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
     for name, v in (("accuracy_threshold", acc), ("coverage_threshold", cov)):
         if not 0 <= v <= 1:
             raise ConfigError(f"{path}: [fidelity] '{name}' must be between 0 and 1")
+    yt = data.get("ytdlp")
+    if not isinstance(yt, dict):
+        raise ConfigError(f"{path}: missing or invalid table [ytdlp]")
+    runtime = yt.get("js_runtime")
+    if runtime not in JS_RUNTIMES:
+        raise ConfigError(f"{path}: [ytdlp] 'js_runtime' must be one of {', '.join(JS_RUNTIMES)}")
     return Config(
+        js_runtime=runtime,
         port=port,
         daily_cap_usd=cap,
         token_limit=limit,

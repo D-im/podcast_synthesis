@@ -12,6 +12,7 @@ from app.store import db
 from app.web.app import create_app
 
 GOOD = Path(__file__).resolve().parent.parent / "config.toml"
+FAKE = Path(__file__).resolve().parent / "fake_config.toml"  # config.toml with fake providers
 
 
 def test_fresh_start_creates_wal_db(tmp_path):
@@ -131,7 +132,10 @@ def _config_text(**over):
         ("accuracy_threshold = 0.9", "accuracy_threshold = 1.5", "accuracy_threshold"),
         ("coverage_threshold = 0.75", "coverage_threshold = -0.1", "coverage_threshold"),
         ('verifier = "fake"', "", "verifier"),
-        ('downloader = "fake"', "", "downloader"),
+        ('downloader = "yt-dlp"', "", "downloader"),
+        ('js_runtime = "node"', 'js_runtime = "bun"', "js_runtime"),
+        ('js_runtime = "node"', "", "js_runtime"),
+        ("[ytdlp]", "[ytdlp_x]", "ytdlp"),
         ('summarizer = "claude-sonnet-5-5"', "", "summarizer"),
         ('transcriber = "universal-3.5-pro"', 'transcriber = ""', "transcriber"),
         ("[fidelity]", "[fidelity_x]", "fidelity"),
@@ -169,7 +173,7 @@ def _run_with(monkeypatch, tmp_path, tools=(), env_loader=None):
     monkeypatch.setattr(main.db, "bootstrap", lambda: real(tmp_path))
     monkeypatch.setattr(main.db, "DEFAULT_DATA_DIR", tmp_path)
     monkeypatch.setattr(main.checks, "check_tools", lambda path=None: list(tools))
-    monkeypatch.setattr(main, "load_config", lambda: load_config(GOOD))
+    monkeypatch.setattr(main, "load_config", lambda: load_config(FAKE))
     monkeypatch.setattr(main.env, "load_env", env_loader or (lambda: None))
     main.run()
     return calls
@@ -207,7 +211,7 @@ def test_run_loads_env_before_computing_warnings(monkeypatch, tmp_path, capsys):
     assert "Missing API key" not in capsys.readouterr().out
 
 
-def _run_wiring(monkeypatch, tmp_path, config_path=GOOD, serve=None):
+def _run_wiring(monkeypatch, tmp_path, config_path=FAKE, serve=None):
     workers = []
     real_worker = main.Worker
 
@@ -262,7 +266,7 @@ def test_run_stops_worker_when_server_raises(monkeypatch, tmp_path):
 
 def test_run_exits_with_message_for_unavailable_provider(monkeypatch, tmp_path, capsys):
     bad = tmp_path / "config.toml"
-    bad.write_text(GOOD.read_text().replace('transcriber = "fake"', 'transcriber = "assemblyai"'))
+    bad.write_text(FAKE.read_text().replace('transcriber = "fake"', 'transcriber = "assemblyai"'))
     _run_wiring(monkeypatch, tmp_path, config_path=bad)
     with pytest.raises(SystemExit) as e:
         main.run()
@@ -273,7 +277,7 @@ def test_run_exits_with_message_for_unavailable_provider(monkeypatch, tmp_path, 
 def test_run_passes_configured_daily_cap_to_the_header(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient as TC
     cfg = tmp_path / "config.toml"
-    cfg.write_text(GOOD.read_text().replace("daily_cap_usd = 5.0", "daily_cap_usd = 7.5"))
+    cfg.write_text(FAKE.read_text().replace("daily_cap_usd = 5.0", "daily_cap_usd = 7.5"))
     captured = {}
     workers = _run_wiring(monkeypatch, tmp_path, config_path=cfg,
                           serve=lambda app, **kw: captured.update(app=app))
@@ -291,7 +295,7 @@ def test_home_page_all_clear(tmp_path):
 def test_run_exits_cleanly_when_data_folder_unusable(monkeypatch, tmp_path, capsys):
     blocker = tmp_path / "data"
     blocker.write_text("not a folder")
-    monkeypatch.setattr(main, "load_config", lambda: load_config(GOOD))
+    monkeypatch.setattr(main, "load_config", lambda: load_config(FAKE))
     monkeypatch.setattr(main.env, "load_env", lambda: None)
     real = db.bootstrap
     monkeypatch.setattr(main.db, "bootstrap", lambda: real(blocker))

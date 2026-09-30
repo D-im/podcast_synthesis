@@ -5,6 +5,7 @@ import logging
 import os
 import threading
 from contextlib import closing
+from dataclasses import replace
 from pathlib import Path
 
 from app import env
@@ -18,14 +19,21 @@ log = logging.getLogger(__name__)
 
 
 def build_adapters(config: Config, behavior: fakes.FakeBehavior | None = None) -> Adapters:
-    """Map provider names from config.toml to adapters. Only 'fake' exists so far."""
+    """Map provider names from config.toml to adapters."""
     p = config.providers
-    for role in ("downloader", "transcriber", "summarizer"):
+    if p["downloader"] not in ("fake", "yt-dlp"):
+        raise ValueError(f"provider '{p['downloader']}' for downloader is not available yet")
+    for role in ("transcriber", "summarizer"):
         if p[role] != "fake":
             raise ValueError(f"provider '{p[role]}' for {role} is not available yet")
     if p["verifier"] not in ("fake", "none"):
         raise ValueError(f"provider '{p['verifier']}' for verifier is not available yet")
-    return fakes.build_fakes(behavior, verifier=p["verifier"] == "fake")
+    adapters = fakes.build_fakes(behavior, verifier=p["verifier"] == "fake")
+    if p["downloader"] == "yt-dlp":
+        from app.adapters.ytdlp import YtDlpDownloader
+
+        adapters = replace(adapters, downloader=YtDlpDownloader(config.js_runtime))
+    return adapters
 
 
 def configured_secrets() -> list[str]:

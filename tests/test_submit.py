@@ -41,6 +41,40 @@ def test_parse_accepts(url):
     assert parse_video_id(url) == VID
 
 
+@pytest.mark.parametrize("url,expected", [
+    (f"youtube.com/watch?v={VID}", VID),
+    (f"www.youtube.com/watch?v={VID}&t=5", VID),
+    (f"youtu.be/{VID}", VID),
+    (f"m.youtube.com/shorts/{VID}", VID),
+    ("youtube.com/watch?v=B7yl7fEHeKM&source_ve_path=OTY3MTQ"
+     "&embeds_referring_euri=https%3A%2F%2Fmarginalrevolution.com%2F", "B7yl7fEHeKM"),
+    ("youtube.com/watch?v=B7yl7fEHeKM&embeds_referring_euri=https://marginalrevolution.com/",
+     "B7yl7fEHeKM"),
+    (f"  YouTube.com/watch?v={VID}\n", VID),
+])
+def test_parse_accepts_schemeless(url, expected):
+    assert parse_video_id(url) == expected
+
+
+def test_parse_tracking_params_resolve_to_id():
+    url = ("youtube.com/watch?v=B7yl7fEHeKM&source_ve_path=OTY3MTQ"
+           "&embeds_referring_euri=https%3A%2F%2Fmarginalrevolution.com%2F")
+    assert parse_video_id(url) == "B7yl7fEHeKM"
+
+
+@pytest.mark.parametrize("url", [
+    f"youtube.com.evil.com/watch?v={VID}",
+    f"evil.com/youtube.com/watch?v={VID}",
+    f"user@youtube.com/watch?v={VID}",
+    f"youtube.com@evil.com/watch?v={VID}",
+    f"javascript:youtube.com/watch?v={VID}",
+    "youtube.com/playlist?list=PLabcdefghijk",
+    "hello",
+])
+def test_parse_rejects_schemeless_lookalikes(url):
+    assert parse_video_id(url) is None
+
+
 @pytest.mark.parametrize("url", [
     "", "plain text", "https://example.com/x",
     f"https://youtube.com.evil.com/watch?v={VID}",
