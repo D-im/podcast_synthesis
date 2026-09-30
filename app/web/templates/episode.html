@@ -1,10 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Episode {{ episode.video_id }}</title>
-<script src="/static/htmx.min.js"></script></head>
-<body>
-<p><a href="/">Submit another link</a></p>
+{% extends "base.html" %}
+{% block title %}Episode {{ episode.video_id }}{% endblock %}
+{% block head %}<script src="/static/htmx.min.js"></script>{% endblock %}
+{% block content %}<p><a href="/">Submit another link</a></p>
 <p>Source: {{ episode.url }}</p>
 {% include "_status.html" %}
-</body>
-</html>
+{% endblock %}

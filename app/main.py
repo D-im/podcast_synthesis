@@ -43,6 +43,6 @@ def run() -> None:
     worker = Worker(db.DEFAULT_DATA_DIR, adapters)
     worker.start()
     try:
-        uvicorn.run(create_app(warnings, db.DEFAULT_DATA_DIR), host=HOST, port=config.port)
+        uvicorn.run(create_app(warnings, db.DEFAULT_DATA_DIR, config.daily_cap_usd), host=HOST, port=config.port)
     finally:
         worker.stop()

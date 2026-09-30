@@ -78,20 +78,32 @@ class VerificationResult:
         }
 
 
+class Meter(Protocol):
+    """Records one paid call. Adapters must call it for every paid call they make.
+
+    Record as soon as a call has been billed, before parsing or validating its response,
+    so a cost is never lost when the step fails afterwards. The ledger cannot be edited.
+    """
+
+    def record(self, provider: str, amount_micro_usd: int) -> None: ...
+
+
 class Downloader(Protocol):
-    def download(self, video_id: str, url: str, dest: Path) -> DownloadResult: ...
+    def download(self, video_id: str, url: str, dest: Path, meter: Meter) -> DownloadResult: ...
 
 
 class Transcriber(Protocol):
-    def transcribe(self, audio_path: Path) -> Transcript: ...
+    def transcribe(self, audio_path: Path, meter: Meter) -> Transcript: ...
 
 
 class Summarizer(Protocol):
-    def summarize(self, transcript: Transcript) -> OnePager: ...
+    def summarize(self, transcript: Transcript, meter: Meter) -> OnePager: ...
 
 
 class Verifier(Protocol):
-    def verify(self, transcript: Transcript, one_pager: OnePager) -> VerificationResult: ...
+    def verify(
+        self, transcript: Transcript, one_pager: OnePager, meter: Meter
+    ) -> VerificationResult: ...
 
 
 @dataclass(frozen=True)

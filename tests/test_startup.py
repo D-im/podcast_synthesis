@@ -22,8 +22,8 @@ def test_fresh_start_creates_wal_db(tmp_path):
     tables = sqlite3.connect(p).execute(
         "select name from sqlite_master where type='table' order by name"
     ).fetchall()
-    assert tables == [("episodes",), ("jobs",), ("steps",)]
-    assert TestClient(create_app([])).get("/").status_code == 200
+    assert tables == [("episodes",), ("jobs",), ("spend_ledger",), ("steps",)]
+    assert TestClient(create_app([], tmp_path)).get("/").status_code == 200
 
 
 def test_restart_keeps_data(tmp_path):
@@ -37,11 +37,12 @@ def test_restart_keeps_data(tmp_path):
     assert sqlite3.connect(p).execute("select x from t").fetchone() == (1,)
 
 
-def test_missing_key_named_on_page_and_console(capsys):
+def test_missing_key_named_on_page_and_console(capsys, tmp_path):
+    db.bootstrap(tmp_path)
     environ = {"ASSEMBLYAI_API_KEY": "sekret1", "ANTHROPIC_API_KEY": "sekret2"}
     w = main.collect_warnings(environ, path="")
     assert any("OPENAI_API_KEY" in x for x in w)
-    html = TestClient(create_app(w)).get("/").text
+    html = TestClient(create_app(w, tmp_path)).get("/").text
     assert "OPENAI_API_KEY" in html
     assert "sekret" not in html and "sekret" not in str(w)
 
@@ -269,8 +270,21 @@ def test_run_exits_with_message_for_unavailable_provider(monkeypatch, tmp_path, 
     assert "Configuration error" in capsys.readouterr().err
 
 
-def test_home_page_all_clear():
-    html = TestClient(create_app([])).get("/").text
+def test_run_passes_configured_daily_cap_to_the_header(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient as TC
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(GOOD.read_text().replace("daily_cap_usd = 5.0", "daily_cap_usd = 7.5"))
+    captured = {}
+    workers = _run_wiring(monkeypatch, tmp_path, config_path=cfg,
+                          serve=lambda app, **kw: captured.update(app=app))
+    main.run()
+    assert "of $7.50" in TC(captured["app"]).get("/").text
+    assert workers[0]._thread is None
+
+
+def test_home_page_all_clear(tmp_path):
+    db.bootstrap(tmp_path)
+    html = TestClient(create_app([], tmp_path)).get("/").text
     assert "All prerequisites present" in html and "Startup warnings" not in html
 
 

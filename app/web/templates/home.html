@@ -1,8 +1,5 @@
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Podcast Synthesis</title></head>
-<body>
-<h1>Podcast Synthesis</h1>
+{% extends "base.html" %}
+{% block content %}<h1>Podcast Synthesis</h1>
 <form method="post" action="/submit">
 <label>YouTube link <input type="text" name="url" value="{{ url or '' }}" size="60"></label>
 <button type="submit">Submit</button>
@@ -16,5 +13,4 @@
 {% else %}
 <p>All prerequisites present.</p>
 {% endif %}
-</body>
-</html>
+{% endblock %}

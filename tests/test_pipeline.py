@@ -193,8 +193,8 @@ def test_download_that_writes_nothing_fails_with_clear_message(data):
     w = worker(data)
     real = w.adapters.downloader.download
 
-    def writes_nothing(video_id, url, dest):
-        result = real(video_id, url, dest)
+    def writes_nothing(video_id, url, dest, meter):
+        result = real(video_id, url, dest, meter)
         dest.unlink()
         return result
 

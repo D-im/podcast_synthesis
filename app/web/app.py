@@ -12,23 +12,38 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.core import submit as core_submit
-from app.store import db, episodes
-from app.web.status import describe_job
+from app.core.meter import format_usd, local_day_bounds_utc, to_micro
+from app.store import db, episodes, spend
+from app.web.status import describe_job, describe_spend
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
-def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR) -> FastAPI:
+def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
+               daily_cap_usd: float = 5.0) -> FastAPI:
     app = FastAPI()
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")),
               name="static")
+
+    cap_text = format_usd(to_micro(daily_cap_usd), 2)
+
+    def today_spend() -> str:
+        """Header text: today's (local day) spend against the Daily Cap. Read-only."""
+        try:
+            start, end = local_day_bounds_utc()
+            with closing(db.connect(data_dir)) as conn:
+                total = spend.total_between(conn, start, end)
+            return f"Today: {format_usd(total, 2)} of {cap_text}"
+        except (sqlite3.Error, OSError, RuntimeError):
+            return f"Today: unavailable (cap {cap_text})"
 
     def home_response(request: Request, status_code: int = 200, error: str | None = None,
                       url: str = ""):
         return TEMPLATES.TemplateResponse(
             request,
             "home.html",
-            {"warnings": warnings, "error": error, "url": url},
+            {"warnings": warnings, "error": error, "url": url,
+             "today_spend": today_spend()},
             status_code=status_code,
         )
 
@@ -61,15 +76,19 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR) -> Fas
         with closing(db.connect(data_dir)) as conn:
             episode = episodes.get_episode(conn, video_id)
             job = episodes.get_latest_job_with_steps(conn, video_id) if episode else None
+            if episode is not None:
+                cost = describe_spend(spend.total_for_episode(conn, video_id),
+                                      spend.by_step(conn, video_id))
         if episode is None:
             raise HTTPException(status_code=404, detail="Episode not found")
-        return episode, describe_job(episode, job)
+        return episode, describe_job(episode, job, cost)
 
     @app.get("/episodes/{video_id}", response_class=HTMLResponse)
     def episode_page(request: Request, video_id: str):
         episode, status = load(video_id)
         return TEMPLATES.TemplateResponse(
-            request, "episode.html", {"episode": episode, "status": status}
+            request, "episode.html",
+            {"episode": episode, "status": status, "today_spend": today_spend()},
         )
 
     @app.get("/episodes/{video_id}/status", response_class=HTMLResponse)

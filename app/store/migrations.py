@@ -33,6 +33,23 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE steps ADD COLUMN message TEXT",
         "ALTER TABLE steps ADD COLUMN retryable INTEGER",
     ],
+    # 3: append-only spend ledger (money in integer micro-dollars, UTC timestamps)
+    [
+        """CREATE TABLE spend_ledger (
+            id INTEGER PRIMARY KEY,
+            video_id TEXT NOT NULL REFERENCES episodes(video_id),
+            step TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            amount_micro_usd INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )""",
+        """CREATE INDEX spend_ledger_video ON spend_ledger(video_id)""",
+        """CREATE INDEX spend_ledger_created ON spend_ledger(created_at)""",
+        """CREATE TRIGGER spend_ledger_no_update BEFORE UPDATE ON spend_ledger
+        BEGIN SELECT RAISE(ABORT, 'spend_ledger is append-only'); END""",
+        """CREATE TRIGGER spend_ledger_no_delete BEFORE DELETE ON spend_ledger
+        BEGIN SELECT RAISE(ABORT, 'spend_ledger is append-only'); END""",
+    ],
 ]
 
 

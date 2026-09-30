@@ -124,9 +124,9 @@ def test_live_progress_shows_the_step_in_progress(env):
     fakes = build_fakes(FakeBehavior(), True)
     real = fakes.transcriber.transcribe
 
-    def transcribe_and_look(audio_path):
+    def transcribe_and_look(audio_path, meter):
         mid["fragment"] = frag(client)  # the page as seen while transcription runs
-        return real(audio_path)
+        return real(audio_path, meter)
 
     fakes.transcriber.transcribe = transcribe_and_look
     Worker(d, fakes).run_next()

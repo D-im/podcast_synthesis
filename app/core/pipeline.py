@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
+from app.core.meter import StepMeter
 from app.core.submit import STEP_NAMES
 from app.ports import Adapters, OnePager, StepError, Transcript
 from app.store import artifacts, episodes
@@ -43,9 +44,10 @@ def run_job(
 
     def run_step(name: str) -> None:
         final = path(name)
+        meter = StepMeter(conn, video_id, name)
         if name == "download":
             with artifacts.atomic_target(final) as tmp:
-                result = adapters.downloader.download(video_id, job["url"], tmp)
+                result = adapters.downloader.download(video_id, job["url"], tmp, meter)
                 if not artifacts.exists(tmp):
                     raise StepError("download produced no audio file", True)
             episodes.set_episode_metadata(
@@ -53,16 +55,16 @@ def run_job(
             )
         elif name == "transcribe":
             artifacts.write_json(
-                final, adapters.transcriber.transcribe(path("download")).to_dict()
+                final, adapters.transcriber.transcribe(path("download"), meter).to_dict()
             )
         elif name == "summarize":
             transcript = Transcript.from_dict(artifacts.read_json(path("transcribe")))
-            artifacts.write_json(final, adapters.summarizer.summarize(transcript).to_dict())
+            artifacts.write_json(final, adapters.summarizer.summarize(transcript, meter).to_dict())
         elif name == "verify":
             transcript = Transcript.from_dict(artifacts.read_json(path("transcribe")))
             one_pager = OnePager.from_dict(artifacts.read_json(path("summarize")))
             artifacts.write_json(
-                final, adapters.verifier.verify(transcript, one_pager).to_dict()
+                final, adapters.verifier.verify(transcript, one_pager, meter).to_dict()
             )
         else:
             raise RuntimeError(f"unknown step {name}")
