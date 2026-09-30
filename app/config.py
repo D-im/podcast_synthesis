@@ -28,6 +28,9 @@ class Config:
     poll_interval_seconds: float = 5.0
     max_wait_minutes: float = 180.0
     transcription_usd_per_hour: float = 0.23
+    summarizer_input_usd_per_million: float = 2.0
+    summarizer_output_usd_per_million: float = 10.0
+    anthropic_max_output_tokens: int = 4096
 
 
 JS_RUNTIMES = ("node", "deno")
@@ -124,7 +127,19 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
     pricing = _optional_table(data, "pricing", path)
     per_hour = _positive(pricing, "transcription_usd_per_hour", 0.23, "pricing", path,
                          allow_zero=True)
+    in_rate = _positive(pricing, "summarizer_input_usd_per_million", 2.0, "pricing", path,
+                        allow_zero=True)
+    out_rate = _positive(pricing, "summarizer_output_usd_per_million", 10.0, "pricing", path,
+                         allow_zero=True)
+    anth = _optional_table(data, "anthropic", path)
+    max_out = anth.get("max_output_tokens", 4096)
+    if isinstance(max_out, bool) or not isinstance(max_out, int) or not 0 < max_out <= 16384:
+        raise ConfigError(
+            f"{path}: [anthropic] 'max_output_tokens' must be an integer from 1 to 16384")
     return Config(
+        summarizer_input_usd_per_million=in_rate,
+        summarizer_output_usd_per_million=out_rate,
+        anthropic_max_output_tokens=max_out,
         js_runtime=runtime,
         speaker_labels=labels,
         poll_interval_seconds=poll,

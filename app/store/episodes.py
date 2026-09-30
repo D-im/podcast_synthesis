@@ -1,6 +1,7 @@
 """All SQL for episodes, jobs and steps."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timezone
 from typing import Sequence
@@ -152,3 +153,26 @@ def set_vendor_job_id(
     )
     if cur.rowcount != 1:  # a silent no-op would lose the job ID and risk paying twice
         raise LookupError(f"step {name} of job {job_id} not found")
+
+
+def latest_one_pager_version(conn: sqlite3.Connection, video_id: str) -> dict | None:
+    row = conn.execute(
+        "SELECT version, created_at, model, prompt_hashes FROM one_pager_versions "
+        "WHERE video_id = ? ORDER BY version DESC LIMIT 1",
+        (video_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {"version": row[0], "created_at": row[1], "model": row[2],
+            "prompt_hashes": json.loads(row[3])}
+
+
+def add_one_pager_version(
+    conn: sqlite3.Connection, video_id: str, version: int, model: str,
+    prompt_hashes: dict[str, str],
+) -> None:
+    conn.execute(
+        "INSERT INTO one_pager_versions (video_id, version, created_at, model, prompt_hashes) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (video_id, version, _now(), model, json.dumps(prompt_hashes, sort_keys=True)),
+    )

@@ -60,7 +60,7 @@ def test_happy_path(data):
     j = job(data)
     assert j["state"] == "done"
     assert states(j) == {s: "done" for s in STEPS}
-    assert files(data) == sorted(["audio.m4a", "transcript.json", "one_pager.json",
+    assert files(data) == sorted(["audio.m4a", "transcript.json", "one_pager.v1.json",
                                   "verification.json"])
     with closing(db.connect(data)) as c:
         ep = episodes.get_episode(c, VID)

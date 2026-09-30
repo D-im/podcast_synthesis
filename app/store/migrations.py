@@ -58,6 +58,17 @@ MIGRATIONS: list[list[str]] = [
         ON spend_ledger(video_id, step, provider, provider_ref)
         WHERE provider_ref IS NOT NULL""",
     ],
+    # 5: versioned One-Pagers (AD-14); the files live beside the Episode's other artifacts
+    [
+        """CREATE TABLE one_pager_versions (
+            video_id TEXT NOT NULL REFERENCES episodes(video_id),
+            version INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            model TEXT NOT NULL,
+            prompt_hashes TEXT NOT NULL,
+            PRIMARY KEY (video_id, version)
+        )""",
+    ],
 ]
 
 

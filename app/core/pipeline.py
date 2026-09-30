@@ -55,6 +55,13 @@ def run_job(
     """Run a Job to completion or first failure. Returns the final Job state."""
     job_id, video_id = job["id"], job["video_id"]
     path = lambda step: artifacts.artifact_path(data_dir, video_id, ARTIFACT_FOR_STEP[step])
+    def finished(step: str) -> bool:
+        if step == "summarize":  # done only while the latest version file exists
+            latest = episodes.latest_one_pager_version(conn, video_id)
+            return latest is not None and artifacts.exists(
+                artifacts.one_pager_path(data_dir, video_id, latest["version"]))
+        return artifacts.exists(path(step))
+
     states = {s["name"]: s["state"] for s in episodes.get_steps(conn, job_id)}
     episodes.set_job_state(conn, job_id, "running")
 
@@ -77,10 +84,24 @@ def run_job(
             )
         elif name == "summarize":
             transcript = Transcript.from_dict(artifacts.read_json(path("transcribe")))
-            artifacts.write_json(final, adapters.summarizer.summarize(transcript, meter).to_dict())
+            one_pager = adapters.summarizer.summarize(transcript, meter)
+            latest = episodes.latest_one_pager_version(conn, video_id)
+            version = max(latest["version"] if latest else 0,
+                          artifacts.latest_one_pager_file_version(data_dir, video_id)) + 1
+            # file first, row second: a crash between leaves a stray file, never a row without one
+            artifacts.write_json(artifacts.one_pager_path(data_dir, video_id, version),
+                                 one_pager.to_dict())
+            episodes.add_one_pager_version(
+                conn, video_id, version, one_pager.model, one_pager.prompt_hashes)
         elif name == "verify":
             transcript = Transcript.from_dict(artifacts.read_json(path("transcribe")))
-            one_pager = OnePager.from_dict(artifacts.read_json(path("summarize")))
+            latest = episodes.latest_one_pager_version(conn, video_id)
+            if latest is None:
+                raise StepError("no One-Pager to verify", True)
+            latest_path = artifacts.one_pager_path(data_dir, video_id, latest["version"])
+            if not artifacts.exists(latest_path):
+                raise StepError("the latest One-Pager file is missing; run summarize again", True)
+            one_pager = OnePager.from_dict(artifacts.read_json(latest_path))
             artifacts.write_json(
                 final, adapters.verifier.verify(transcript, one_pager, meter).to_dict()
             )
@@ -91,7 +112,7 @@ def run_job(
     for name in STEP_NAMES:
         if name not in states:
             continue
-        if not rerun_rest and states[name] == "done" and artifacts.exists(path(name)):
+        if not rerun_rest and states[name] == "done" and finished(name):
             continue
         rerun_rest = True
         if name == "verify" and adapters.verifier is None:

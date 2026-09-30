@@ -77,7 +77,7 @@ class FakeSummarizer:
         return OnePager((
             Section("Summary", f"Fake summary of {len(transcript.segments)} segments."),
             Section("Key ideas", "Deterministic testing matters."),
-        ))
+        ), model="fake", prompt_hashes={})
 
 
 class FakeVerifier:

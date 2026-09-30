@@ -10,7 +10,7 @@ from typing import Any, Iterator
 
 AUDIO = "audio.m4a"
 TRANSCRIPT = "transcript.json"
-ONE_PAGER = "one_pager.json"
+ONE_PAGER = "one_pager.json"  # legacy unversioned name; new runs write one_pager.v<N>.json
 VERIFICATION = "verification.json"
 
 
@@ -80,3 +80,20 @@ def write_json(final: Path, obj: Any) -> None:
 def read_json(path: Path) -> Any:
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+_ONE_PAGER_FILE = re.compile(r"one_pager\.v(\d+)\.json")
+
+
+def one_pager_path(data_dir: Path, video_id: str, version: int) -> Path:
+    return artifact_path(data_dir, video_id, f"one_pager.v{int(version)}.json")
+
+
+def latest_one_pager_file_version(data_dir: Path, video_id: str) -> int:
+    """Highest One-Pager version file on disk, or 0. Guards against overwriting a stray file."""
+    try:
+        names = os.listdir(episode_dir(data_dir, video_id))
+    except FileNotFoundError:
+        return 0
+    return max((int(m.group(1)) for n in names if (m := _ONE_PAGER_FILE.fullmatch(n))),
+               default=0)

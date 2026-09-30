@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.core import submit as core_submit
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
-from app.ports import Transcript
+from app.ports import OnePager, Transcript
 from app.store import artifacts, db, episodes, spend
 from app.web.status import describe_job, describe_spend, format_timestamp
 
@@ -77,12 +77,32 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         with closing(db.connect(data_dir)) as conn:
             episode = episodes.get_episode(conn, video_id)
             job = episodes.get_latest_job_with_steps(conn, video_id) if episode else None
+            latest = episodes.latest_one_pager_version(conn, video_id) if episode else None
             if episode is not None:
                 cost = describe_spend(spend.total_for_episode(conn, video_id),
                                       spend.by_step(conn, video_id))
         if episode is None:
             raise HTTPException(status_code=404, detail="Episode not found")
-        return episode, describe_job(episode, job, cost)
+        status = describe_job(episode, job, cost)
+        status["one_pager"] = None
+        status["one_pager_error"] = None
+        summarized = any(s["name"] == "summarize" and s["state"] == "done"
+                         for s in (job or {}).get("steps", []))
+        if summarized and latest is not None:
+            try:
+                page = OnePager.from_dict(artifacts.read_json(
+                    artifacts.one_pager_path(data_dir, video_id, latest["version"])))
+                status["one_pager"] = {
+                    "version": latest["version"],
+                    "sections": [{"name": x.name, "text": x.text} for x in page.sections],
+                }
+            except (ValueError, OSError, KeyError, TypeError):
+                # unreadable artifact: say so instead of silently showing nothing
+                status["one_pager_error"] = f"One-Pager v{latest['version']} could not be read."
+        elif summarized:
+            status["one_pager_error"] = "No One-Pager version is recorded for this episode."
+
+        return episode, status
 
     @app.get("/episodes/{video_id}", response_class=HTMLResponse)
     def episode_page(request: Request, video_id: str):

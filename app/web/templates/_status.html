@@ -7,4 +7,10 @@
 {% endif %}{% if status.steps %}<ol>
 {% for s in status.steps %}<li>{{ s.name }}: {{ s.state }}{% if s.message %} ({{ s.message }}){% endif %}{% if s.spend %} - {{ s.spend }}{% endif %}</li>
 {% endfor %}</ol>
+{% endif %}{% if status.one_pager_error %}<p role="alert">{{ status.one_pager_error }}</p>
+{% endif %}{% if status.one_pager %}<section id="one-pager">
+<h2>One-Pager (v{{ status.one_pager.version }})</h2>
+{% for sec in status.one_pager.sections %}<h3>{{ sec.name }}</h3>
+<div class="one-pager-text" style="white-space: pre-wrap">{{ sec.text }}</div>
+{% endfor %}</section>
 {% endif %}</div>

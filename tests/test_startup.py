@@ -23,7 +23,8 @@ def test_fresh_start_creates_wal_db(tmp_path):
     tables = sqlite3.connect(p).execute(
         "select name from sqlite_master where type='table' order by name"
     ).fetchall()
-    assert tables == [("episodes",), ("jobs",), ("spend_ledger",), ("steps",)]
+    assert tables == [("episodes",), ("jobs",), ("one_pager_versions",), ("spend_ledger",),
+                      ("steps",)]
     assert TestClient(create_app([], tmp_path)).get("/").status_code == 200
 
 
@@ -266,7 +267,7 @@ def test_run_stops_worker_when_server_raises(monkeypatch, tmp_path):
 
 def test_run_exits_with_message_for_unavailable_provider(monkeypatch, tmp_path, capsys):
     bad = tmp_path / "config.toml"
-    bad.write_text(FAKE.read_text().replace('summarizer = "fake"', 'summarizer = "anthropic"'))
+    bad.write_text(FAKE.read_text().replace('verifier = "fake"', 'verifier = "openai"'))
     _run_wiring(monkeypatch, tmp_path, config_path=bad)
     with pytest.raises(SystemExit) as e:
         main.run()

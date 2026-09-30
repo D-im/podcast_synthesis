@@ -25,7 +25,7 @@ def build_adapters(config: Config, behavior: fakes.FakeBehavior | None = None) -
         raise ValueError(f"provider '{p['downloader']}' for downloader is not available yet")
     if p["transcriber"] not in ("fake", "assemblyai"):
         raise ValueError(f"provider '{p['transcriber']}' for transcriber is not available yet")
-    if p["summarizer"] != "fake":
+    if p["summarizer"] not in ("fake", "anthropic"):
         raise ValueError(f"provider '{p['summarizer']}' for summarizer is not available yet")
     if p["verifier"] not in ("fake", "none"):
         raise ValueError(f"provider '{p['verifier']}' for verifier is not available yet")
@@ -38,6 +38,10 @@ def build_adapters(config: Config, behavior: fakes.FakeBehavior | None = None) -
         from app.adapters.assemblyai import AssemblyAITranscriber
 
         adapters = replace(adapters, transcriber=AssemblyAITranscriber.from_config(config))
+    if p["summarizer"] == "anthropic":
+        from app.adapters.anthropic import AnthropicSummarizer
+
+        adapters = replace(adapters, summarizer=AnthropicSummarizer.from_config(config))
     return adapters
 
 

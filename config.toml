@@ -21,8 +21,13 @@ speaker_labels = true
 poll_interval_seconds = 5
 max_wait_minutes = 180
 
+[anthropic]
+max_output_tokens = 4096
+
 [pricing]
 transcription_usd_per_hour = 0.23   # includes speaker labels
+summarizer_input_usd_per_million = 2.0
+summarizer_output_usd_per_million = 10.0
 
 [fidelity]
 accuracy_threshold = 0.9

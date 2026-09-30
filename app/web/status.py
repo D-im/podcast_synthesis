@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from app.core.meter import format_usd
 from app.core.submit import STEP_NAMES
+from app.core.text import format_timestamp  # noqa: F401  (re-exported for the web layer)
 
 RUNNING_LABELS = {
     "download": "Downloading",
@@ -11,14 +12,6 @@ RUNNING_LABELS = {
     "verify": "Verifying",
 }
 POLLING_STATES = ("queued", "running")
-
-
-def format_timestamp(seconds: float) -> str:
-    """mm:ss, or h:mm:ss from one hour on."""
-    total = max(0, int(seconds))
-    h, rem = divmod(total, 3600)
-    m, s = divmod(rem, 60)
-    return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
 def describe_spend(total_micro: int = 0, by_step: dict[str, int] | None = None) -> dict:

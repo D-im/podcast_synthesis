@@ -1,7 +1,7 @@
 """Provider boundary: result types, errors and the four ports."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -54,13 +54,23 @@ class Section:
 @dataclass(frozen=True)
 class OnePager:
     sections: tuple[Section, ...]
+    model: str = ""
+    prompt_hashes: dict[str, str] = field(default_factory=dict)  # prompt name -> SHA-256
 
     def to_dict(self) -> dict[str, Any]:
-        return {"sections": [asdict(s) for s in self.sections]}
+        return {
+            "sections": [asdict(s) for s in self.sections],
+            "model": self.model,
+            "prompt_hashes": dict(self.prompt_hashes),
+        }
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "OnePager":
-        return cls(tuple(Section(s["name"], s["text"]) for s in d["sections"]))
+        return cls(
+            tuple(Section(s["name"], s["text"]) for s in d["sections"]),
+            model=d.get("model", ""),
+            prompt_hashes=dict(d.get("prompt_hashes") or {}),
+        )
 
 
 @dataclass(frozen=True)
