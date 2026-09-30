@@ -16,6 +16,14 @@ transcriber = "universal-3.5-pro"
 summarizer = "claude-sonnet-5-5"
 verifier = "gpt-6.1-sol"
 
+[assemblyai]
+speaker_labels = true
+poll_interval_seconds = 5
+max_wait_minutes = 180
+
+[pricing]
+transcription_usd_per_hour = 0.23   # includes speaker labels
+
 [fidelity]
 accuracy_threshold = 0.9
 coverage_threshold = 0.75

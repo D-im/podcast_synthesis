@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.ports import (
-    Adapters, DownloadResult, Meter, OnePager, Section, Segment, StepError, Transcript,
+    Adapters, DownloadResult, Meter, OnePager, Resume, Section, Segment, StepError, Transcript,
     VerificationResult,
 )
 
@@ -54,7 +54,8 @@ class FakeTranscriber:
     def __init__(self, b: FakeBehavior):
         self.b = b
 
-    def transcribe(self, audio_path: Path, meter: Meter) -> Transcript:
+    def transcribe(self, audio_path: Path, meter: Meter,
+                   resume: Resume | None = None) -> Transcript:
         self.b.enter("transcribe")
         self.b.charge(meter)
         self.b.maybe_fail("transcribe")

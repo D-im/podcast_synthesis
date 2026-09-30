@@ -13,8 +13,9 @@ from fastapi.templating import Jinja2Templates
 
 from app.core import submit as core_submit
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
-from app.store import db, episodes, spend
-from app.web.status import describe_job, describe_spend
+from app.ports import Transcript
+from app.store import artifacts, db, episodes, spend
+from app.web.status import describe_job, describe_spend, format_timestamp
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -99,5 +100,22 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         )
         response.headers["Cache-Control"] = "no-store"  # never reuse a stale poll
         return response
+
+    @app.get("/episodes/{video_id}/transcript", response_class=HTMLResponse)
+    def transcript_page(request: Request, video_id: str):
+        try:
+            path = artifacts.artifact_path(data_dir, video_id, artifacts.TRANSCRIPT)
+            transcript = Transcript.from_dict(artifacts.read_json(path))
+            lines = [{"time": format_timestamp(s.start), "speaker": s.speaker, "text": s.text}
+                     for s in transcript.segments]
+        except (ValueError, OSError, KeyError, TypeError, OverflowError):
+            raise HTTPException(status_code=404, detail="Transcript not found") from None
+        with closing(db.connect(data_dir)) as conn:
+            episode = episodes.get_episode(conn, video_id)
+        return TEMPLATES.TemplateResponse(
+            request, "transcript.html",
+            {"video_id": video_id, "title": (episode or {}).get("title") or video_id,
+             "lines": lines, "today_spend": today_spend()},
+        )
 
     return app

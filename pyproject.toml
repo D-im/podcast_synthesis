@@ -9,6 +9,7 @@ dependencies = [
     "jinja2",
     "python-dotenv",
     "yt-dlp[default]==2026.8.19",
+    "assemblyai==1.6.1",
 ]
 
 [dependency-groups]

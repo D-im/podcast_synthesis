@@ -50,6 +50,14 @@ MIGRATIONS: list[list[str]] = [
         """CREATE TRIGGER spend_ledger_no_delete BEFORE DELETE ON spend_ledger
         BEGIN SELECT RAISE(ABORT, 'spend_ledger is append-only'); END""",
     ],
+    # 4: resumable vendor job on steps; idempotent ledger rows keyed by a vendor reference
+    [
+        "ALTER TABLE steps ADD COLUMN vendor_job_id TEXT",
+        "ALTER TABLE spend_ledger ADD COLUMN provider_ref TEXT",
+        """CREATE UNIQUE INDEX spend_ledger_ref
+        ON spend_ledger(video_id, step, provider, provider_ref)
+        WHERE provider_ref IS NOT NULL""",
+    ],
 ]
 
 

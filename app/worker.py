@@ -23,9 +23,10 @@ def build_adapters(config: Config, behavior: fakes.FakeBehavior | None = None) -
     p = config.providers
     if p["downloader"] not in ("fake", "yt-dlp"):
         raise ValueError(f"provider '{p['downloader']}' for downloader is not available yet")
-    for role in ("transcriber", "summarizer"):
-        if p[role] != "fake":
-            raise ValueError(f"provider '{p[role]}' for {role} is not available yet")
+    if p["transcriber"] not in ("fake", "assemblyai"):
+        raise ValueError(f"provider '{p['transcriber']}' for transcriber is not available yet")
+    if p["summarizer"] != "fake":
+        raise ValueError(f"provider '{p['summarizer']}' for summarizer is not available yet")
     if p["verifier"] not in ("fake", "none"):
         raise ValueError(f"provider '{p['verifier']}' for verifier is not available yet")
     adapters = fakes.build_fakes(behavior, verifier=p["verifier"] == "fake")
@@ -33,6 +34,10 @@ def build_adapters(config: Config, behavior: fakes.FakeBehavior | None = None) -
         from app.adapters.ytdlp import YtDlpDownloader
 
         adapters = replace(adapters, downloader=YtDlpDownloader(config.js_runtime))
+    if p["transcriber"] == "assemblyai":
+        from app.adapters.assemblyai import AssemblyAITranscriber
+
+        adapters = replace(adapters, transcriber=AssemblyAITranscriber.from_config(config))
     return adapters
 
 

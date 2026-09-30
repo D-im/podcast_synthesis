@@ -57,11 +57,13 @@ class StepMeter:
         self.video_id = video_id
         self.step = step
 
-    def record(self, provider: str, amount_micro_usd: int) -> None:
+    def record(self, provider: str, amount_micro_usd: int, ref: str | None = None) -> None:
         if isinstance(amount_micro_usd, bool) or not isinstance(amount_micro_usd, int):
             raise ValueError("amount_micro_usd must be an int")
         if amount_micro_usd < 0:
             raise ValueError("amount_micro_usd must not be negative")
         if not isinstance(provider, str) or not provider.strip():
             raise ValueError("provider must be a non-empty string")
-        spend.append(self.conn, self.video_id, self.step, provider, amount_micro_usd)
+        if ref is not None and (not isinstance(ref, str) or not ref.strip()):
+            raise ValueError("ref must be a non-empty string")
+        spend.append(self.conn, self.video_id, self.step, provider, amount_micro_usd, ref=ref)

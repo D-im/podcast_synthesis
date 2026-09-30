@@ -3,6 +3,7 @@
 <p>Status: <strong>{{ status.label }}</strong></p>
 <p>Spend: <strong>{{ status.spend.total }}</strong></p>
 {% if status.message %}<p>Error: {{ status.message }}</p>
+{% endif %}{% if status.transcript_ready %}<p><a href="/episodes/{{ episode.video_id }}/transcript">Transcript</a></p>
 {% endif %}{% if status.steps %}<ol>
 {% for s in status.steps %}<li>{{ s.name }}: {{ s.state }}{% if s.message %} ({{ s.message }}){% endif %}{% if s.spend %} - {{ s.spend }}{% endif %}</li>
 {% endfor %}</ol>

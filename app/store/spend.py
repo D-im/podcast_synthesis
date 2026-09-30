@@ -16,12 +16,21 @@ def utc_stamp(moment: datetime | None = None) -> str:
 
 
 def append(conn: sqlite3.Connection, video_id: str, step: str, provider: str,
-           amount_micro_usd: int, created_at: datetime | None = None) -> None:
-    conn.execute(
-        "INSERT INTO spend_ledger (video_id, step, provider, amount_micro_usd, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (video_id, step, provider, amount_micro_usd, utc_stamp(created_at)),
-    )
+           amount_micro_usd: int, created_at: datetime | None = None,
+           ref: str | None = None) -> None:
+    """Append one row. With a `ref`, a repeat of the same (episode, step, provider, ref) is ignored."""
+    cols = "(video_id, step, provider, amount_micro_usd, created_at, provider_ref)"
+    values = (video_id, step, provider, amount_micro_usd, utc_stamp(created_at), ref)
+    if ref is None:
+        conn.execute(f"INSERT INTO spend_ledger {cols} VALUES (?, ?, ?, ?, ?, ?)", values)
+    else:
+        # only a repeat of the same paid job is skipped; any other violation still raises
+        conn.execute(
+            f"INSERT INTO spend_ledger {cols} VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(video_id, step, provider, provider_ref) "
+            "WHERE provider_ref IS NOT NULL DO NOTHING",
+            values,
+        )
 
 
 def total_for_episode(conn: sqlite3.Connection, video_id: str) -> int:

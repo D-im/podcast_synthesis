@@ -134,3 +134,21 @@ def set_episode_metadata(
         "UPDATE episodes SET title = ?, duration_seconds = ? WHERE video_id = ?",
         (title, duration_seconds, video_id),
     )
+
+
+def get_vendor_job_id(conn: sqlite3.Connection, job_id: int, name: str) -> str | None:
+    row = conn.execute(
+        "SELECT vendor_job_id FROM steps WHERE job_id = ? AND name = ?", (job_id, name)
+    ).fetchone()
+    return row[0] if row else None
+
+
+def set_vendor_job_id(
+    conn: sqlite3.Connection, job_id: int, name: str, vendor_job_id: str | None
+) -> None:
+    cur = conn.execute(
+        "UPDATE steps SET vendor_job_id = ? WHERE job_id = ? AND name = ?",
+        (vendor_job_id, job_id, name),
+    )
+    if cur.rowcount != 1:  # a silent no-op would lose the job ID and risk paying twice
+        raise LookupError(f"step {name} of job {job_id} not found")

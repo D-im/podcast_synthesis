@@ -13,6 +13,14 @@ RUNNING_LABELS = {
 POLLING_STATES = ("queued", "running")
 
 
+def format_timestamp(seconds: float) -> str:
+    """mm:ss, or h:mm:ss from one hour on."""
+    total = max(0, int(seconds))
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
 def describe_spend(total_micro: int = 0, by_step: dict[str, int] | None = None) -> dict:
     return {
         "total": format_usd(total_micro),
@@ -52,6 +60,8 @@ def describe_job(episode: dict, job: dict | None, spend: dict | None = None) -> 
         "failed_step": failed["name"] if failed else None,
         "message": message,
         "spend": spend,
+        "transcript_ready": any(s["name"] == "transcribe" and s["state"] == "done"
+                                for s in steps),
         "steps": [{"name": s["name"], "state": s["state"], "message": s.get("message")
                    if s["state"] in ("skipped", "failed") else None,
                    "spend": spend["by_step"].get(s["name"])} for s in steps],

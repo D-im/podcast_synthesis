@@ -26,6 +26,7 @@ class Segment:
     start: float
     end: float
     text: str
+    speaker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ class Transcript:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Transcript":
-        return cls(tuple(Segment(s["start"], s["end"], s["text"]) for s in d["segments"]))
+        return cls(tuple(Segment(s["start"], s["end"], s["text"], s.get("speaker")) for s in d["segments"]))
 
     @property
     def text(self) -> str:
@@ -85,7 +86,19 @@ class Meter(Protocol):
     so a cost is never lost when the step fails afterwards. The ledger cannot be edited.
     """
 
-    def record(self, provider: str, amount_micro_usd: int) -> None: ...
+    def record(self, provider: str, amount_micro_usd: int, ref: str | None = None) -> None:
+        """`ref` (e.g. a vendor job ID) makes the row idempotent: a repeat is ignored."""
+        ...
+
+
+class Resume(Protocol):
+    """Step-bound handle for a vendor job ID, so a re-run resumes instead of paying twice."""
+
+    def load(self) -> str | None: ...
+
+    def save(self, vendor_job_id: str) -> None: ...
+
+    def clear(self) -> None: ...
 
 
 class Downloader(Protocol):
@@ -93,7 +106,7 @@ class Downloader(Protocol):
 
 
 class Transcriber(Protocol):
-    def transcribe(self, audio_path: Path, meter: Meter) -> Transcript: ...
+    def transcribe(self, audio_path: Path, meter: Meter, resume: Resume) -> Transcript: ...
 
 
 class Summarizer(Protocol):

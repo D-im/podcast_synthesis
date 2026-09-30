@@ -266,7 +266,7 @@ def test_run_stops_worker_when_server_raises(monkeypatch, tmp_path):
 
 def test_run_exits_with_message_for_unavailable_provider(monkeypatch, tmp_path, capsys):
     bad = tmp_path / "config.toml"
-    bad.write_text(FAKE.read_text().replace('transcriber = "fake"', 'transcriber = "assemblyai"'))
+    bad.write_text(FAKE.read_text().replace('summarizer = "fake"', 'summarizer = "anthropic"'))
     _run_wiring(monkeypatch, tmp_path, config_path=bad)
     with pytest.raises(SystemExit) as e:
         main.run()

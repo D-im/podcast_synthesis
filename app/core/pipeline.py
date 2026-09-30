@@ -21,6 +21,22 @@ ARTIFACT_FOR_STEP = {
 }
 
 
+class StepResume:
+    """Resume handle bound to one step, backed by steps.vendor_job_id."""
+
+    def __init__(self, conn: sqlite3.Connection, job_id: int, step: str):
+        self.conn, self.job_id, self.step = conn, job_id, step
+
+    def load(self) -> str | None:
+        return episodes.get_vendor_job_id(self.conn, self.job_id, self.step)
+
+    def save(self, vendor_job_id: str) -> None:
+        episodes.set_vendor_job_id(self.conn, self.job_id, self.step, vendor_job_id)
+
+    def clear(self) -> None:
+        episodes.set_vendor_job_id(self.conn, self.job_id, self.step, None)
+
+
 def sanitize(message: str, secrets: Iterable[str]) -> str:
     """Redact secret values first, then truncate (so a cut can't leave a partial secret)."""
     for s in secrets:
@@ -54,8 +70,10 @@ def run_job(
                 conn, video_id, result.title, result.duration_seconds
             )
         elif name == "transcribe":
+            resume = StepResume(conn, job_id, name)
             artifacts.write_json(
-                final, adapters.transcriber.transcribe(path("download"), meter).to_dict()
+                final,
+                adapters.transcriber.transcribe(path("download"), meter, resume).to_dict(),
             )
         elif name == "summarize":
             transcript = Transcript.from_dict(artifacts.read_json(path("transcribe")))

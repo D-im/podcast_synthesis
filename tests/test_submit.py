@@ -164,12 +164,12 @@ def test_connection_pragmas(tmp_path):
 def test_migrations_idempotent_and_keep_data(tmp_path):
     db.bootstrap(tmp_path)
     c = db.connect(tmp_path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 4
     episodes.create_episode_with_job(c, VID, "u", ["download"])
     c.close()
     db.bootstrap(tmp_path)
     c = db.connect(tmp_path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 4
     assert c.execute("select count(*) from episodes").fetchone()[0] == 1
     c.close()
 

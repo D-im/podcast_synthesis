@@ -24,6 +24,10 @@ class Config:
     accuracy_threshold: float
     coverage_threshold: float
     js_runtime: str = "node"
+    speaker_labels: bool = True
+    poll_interval_seconds: float = 5.0
+    max_wait_minutes: float = 180.0
+    transcription_usd_per_hour: float = 0.23
 
 
 JS_RUNTIMES = ("node", "deno")
@@ -53,6 +57,26 @@ def _str_table(data: dict, key: str, path: Path, roles=ROLES) -> dict[str, str]:
         if not isinstance(v, str) or not v:
             raise ConfigError(f"{path}: [{key}] '{k}' must be a non-empty string")
     return t
+
+
+def _optional_table(data: dict, key: str, path: Path) -> dict:
+    t = data.get(key, {})
+    if not isinstance(t, dict):
+        raise ConfigError(f"{path}: [{key}] must be a table")
+    return t
+
+
+def _positive(table: dict, key: str, default: float, name: str, path: Path,
+              allow_zero: bool = False) -> float:
+    v = table.get(key, default)
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        raise ConfigError(f"{path}: [{name}] '{key}' must be a number")
+    v = float(v)
+    if not math.isfinite(v) or v < 0 or (v == 0 and not allow_zero):
+        raise ConfigError(
+            f"{path}: [{name}] '{key}' must be a finite number, "
+            f"{'not negative' if allow_zero else 'greater than 0'}")
+    return v
 
 
 def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
@@ -91,8 +115,21 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
     runtime = yt.get("js_runtime")
     if runtime not in JS_RUNTIMES:
         raise ConfigError(f"{path}: [ytdlp] 'js_runtime' must be one of {', '.join(JS_RUNTIMES)}")
+    aai = _optional_table(data, "assemblyai", path)
+    labels = aai.get("speaker_labels", True)
+    if not isinstance(labels, bool):
+        raise ConfigError(f"{path}: [assemblyai] 'speaker_labels' must be true or false")
+    poll = _positive(aai, "poll_interval_seconds", 5.0, "assemblyai", path)
+    max_wait = _positive(aai, "max_wait_minutes", 180.0, "assemblyai", path)
+    pricing = _optional_table(data, "pricing", path)
+    per_hour = _positive(pricing, "transcription_usd_per_hour", 0.23, "pricing", path,
+                         allow_zero=True)
     return Config(
         js_runtime=runtime,
+        speaker_labels=labels,
+        poll_interval_seconds=poll,
+        max_wait_minutes=max_wait,
+        transcription_usd_per_hour=per_hour,
         port=port,
         daily_cap_usd=cap,
         token_limit=limit,
