@@ -84,7 +84,8 @@ def run_job(
             )
         elif name == "summarize":
             transcript = Transcript.from_dict(artifacts.read_json(path("transcribe")))
-            one_pager = adapters.summarizer.summarize(transcript, meter)
+            one_pager = adapters.summarizer.summarize(
+                transcript, meter, artifacts.notes_cache(data_dir, video_id))
             latest = episodes.latest_one_pager_version(conn, video_id)
             version = max(latest["version"] if latest else 0,
                           artifacts.latest_one_pager_file_version(data_dir, video_id)) + 1

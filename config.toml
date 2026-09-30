@@ -23,6 +23,8 @@ max_wait_minutes = 180
 
 [anthropic]
 max_output_tokens = 4096
+map_chunk_tokens = 60000
+map_output_tokens = 4096
 
 [pricing]
 transcription_usd_per_hour = 0.23   # includes speaker labels

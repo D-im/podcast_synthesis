@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.ports import (
-    Adapters, DownloadResult, Meter, OnePager, Resume, Section, Segment, StepError, Transcript,
+    Adapters, DownloadResult, Meter, NotesCache, OnePager, Resume, Section, Segment, StepError, Transcript,
     VerificationResult,
 )
 
@@ -70,7 +70,8 @@ class FakeSummarizer:
     def __init__(self, b: FakeBehavior):
         self.b = b
 
-    def summarize(self, transcript: Transcript, meter: Meter) -> OnePager:
+    def summarize(self, transcript: Transcript, meter: Meter,
+                  cache: NotesCache | None = None) -> OnePager:
         self.b.enter("summarize")
         self.b.charge(meter)
         self.b.maybe_fail("summarize")

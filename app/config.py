@@ -31,6 +31,8 @@ class Config:
     summarizer_input_usd_per_million: float = 2.0
     summarizer_output_usd_per_million: float = 10.0
     anthropic_max_output_tokens: int = 4096
+    map_chunk_tokens: int = 60000
+    map_output_tokens: int = 4096
 
 
 JS_RUNTIMES = ("node", "deno")
@@ -136,7 +138,16 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
     if isinstance(max_out, bool) or not isinstance(max_out, int) or not 0 < max_out <= 16384:
         raise ConfigError(
             f"{path}: [anthropic] 'max_output_tokens' must be an integer from 1 to 16384")
+    chunk = anth.get("map_chunk_tokens", 60000)
+    if isinstance(chunk, bool) or not isinstance(chunk, int) or chunk <= 0:
+        raise ConfigError(f"{path}: [anthropic] 'map_chunk_tokens' must be a positive integer")
+    map_out = anth.get("map_output_tokens", 4096)
+    if isinstance(map_out, bool) or not isinstance(map_out, int) or not 0 < map_out <= 16384:
+        raise ConfigError(
+            f"{path}: [anthropic] 'map_output_tokens' must be an integer from 1 to 16384")
     return Config(
+        map_chunk_tokens=chunk,
+        map_output_tokens=map_out,
         summarizer_input_usd_per_million=in_rate,
         summarizer_output_usd_per_million=out_rate,
         anthropic_max_output_tokens=max_out,

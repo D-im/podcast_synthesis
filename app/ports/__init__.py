@@ -119,8 +119,16 @@ class Transcriber(Protocol):
     def transcribe(self, audio_path: Path, meter: Meter, resume: Resume) -> Transcript: ...
 
 
+class NotesCache(Protocol):
+    """Finished map-step notes, so a retry never pays for them twice."""
+
+    def get(self, key: str) -> str | None: ...
+
+    def put(self, key: str, text: str) -> None: ...
+
+
 class Summarizer(Protocol):
-    def summarize(self, transcript: Transcript, meter: Meter) -> OnePager: ...
+    def summarize(self, transcript: Transcript, meter: Meter, cache: NotesCache) -> OnePager: ...
 
 
 class Verifier(Protocol):

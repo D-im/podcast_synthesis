@@ -1,7 +1,7 @@
 """Text helpers shared by the web layer and adapters."""
 from __future__ import annotations
 
-from app.ports import Transcript
+from app.ports import Segment, Transcript
 
 
 def format_timestamp(seconds: float, always_hours: bool = False) -> str:
@@ -12,11 +12,13 @@ def format_timestamp(seconds: float, always_hours: bool = False) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h or always_hours else f"{m:02d}:{s:02d}"
 
 
+def segment_line(s: Segment) -> str:
+    """`[h:mm:ss] Speaker: text`, the speaker part only when present."""
+    stamp = format_timestamp(s.start, always_hours=True)
+    who = f"{s.speaker}: " if s.speaker else ""
+    return f"[{stamp}] {who}{s.text}"
+
+
 def transcript_text(transcript: Transcript) -> str:
-    """One line per segment: `[h:mm:ss] Speaker: text`, the speaker part only when present."""
-    lines = []
-    for s in transcript.segments:
-        stamp = format_timestamp(s.start, always_hours=True)
-        who = f"{s.speaker}: " if s.speaker else ""
-        lines.append(f"[{stamp}] {who}{s.text}")
-    return "\n".join(lines)
+    """One line per segment, see `segment_line`."""
+    return "\n".join(segment_line(s) for s in transcript.segments)

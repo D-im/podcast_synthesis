@@ -97,3 +97,38 @@ def latest_one_pager_file_version(data_dir: Path, video_id: str) -> int:
         return 0
     return max((int(m.group(1)) for n in names if (m := _ONE_PAGER_FILE.fullmatch(n))),
                default=0)
+
+
+_NOTES_KEY = re.compile(r"[0-9a-f]{64}")
+NOTES_DIR = "summarize-notes"
+
+
+class FileNotesCache:
+    """Map-step notes as one file per key under an episode's `summarize-notes/` folder."""
+
+    def __init__(self, folder: Path):
+        self.folder = Path(folder)
+
+    def _path(self, key: str) -> Path:
+        if not _NOTES_KEY.fullmatch(key):
+            raise ValueError("unsafe notes cache key")
+        return self.folder / f"{key}.txt"
+
+    def get(self, key: str) -> str | None:
+        try:
+            text = self._path(key).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):  # missing, unreadable or corrupt: just re-make it
+            return None
+        return text if text.strip() else None
+
+    def put(self, key: str, text: str) -> None:
+        final = self._path(key)
+        with atomic_target(final) as tmp:
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(text)
+                f.flush()
+                os.fsync(f.fileno())
+
+
+def notes_cache(data_dir: Path, video_id: str) -> FileNotesCache:
+    return FileNotesCache(episode_dir(data_dir, video_id) / NOTES_DIR)
