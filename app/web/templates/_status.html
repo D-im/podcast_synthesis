@@ -1,0 +1,8 @@
+<div id="job-status" data-episode="{{ episode.video_id }}"{% if status.polling %} hx-get="/episodes/{{ episode.video_id }}/status" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+<h1>{{ status.title }}</h1>
+<p>Status: <strong>{{ status.label }}</strong></p>
+{% if status.message %}<p>Error: {{ status.message }}</p>
+{% endif %}{% if status.steps %}<ol>
+{% for s in status.steps %}<li>{{ s.name }}: {{ s.state }}{% if s.message %} ({{ s.message }}){% endif %}</li>
+{% endfor %}</ol>
+{% endif %}</div>

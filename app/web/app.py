@@ -8,16 +8,20 @@ from urllib.parse import parse_qs
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.core import submit as core_submit
 from app.store import db, episodes
+from app.web.status import describe_job
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR) -> FastAPI:
     app = FastAPI()
+    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")),
+              name="static")
 
     def home_response(request: Request, status_code: int = 200, error: str | None = None,
                       url: str = ""):
@@ -53,15 +57,28 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR) -> Fas
             return home_response(request, 400, result.reason, url)
         return RedirectResponse(f"/episodes/{result.video_id}", status_code=303)
 
-    @app.get("/episodes/{video_id}", response_class=HTMLResponse)
-    def episode_page(request: Request, video_id: str):
+    def load(video_id: str):
         with closing(db.connect(data_dir)) as conn:
             episode = episodes.get_episode(conn, video_id)
             job = episodes.get_latest_job_with_steps(conn, video_id) if episode else None
         if episode is None:
             raise HTTPException(status_code=404, detail="Episode not found")
+        return episode, describe_job(episode, job)
+
+    @app.get("/episodes/{video_id}", response_class=HTMLResponse)
+    def episode_page(request: Request, video_id: str):
+        episode, status = load(video_id)
         return TEMPLATES.TemplateResponse(
-            request, "episode.html", {"episode": episode, "job": job}
+            request, "episode.html", {"episode": episode, "status": status}
         )
+
+    @app.get("/episodes/{video_id}/status", response_class=HTMLResponse)
+    def episode_status(request: Request, video_id: str):
+        episode, status = load(video_id)
+        response = TEMPLATES.TemplateResponse(
+            request, "_status.html", {"episode": episode, "status": status}
+        )
+        response.headers["Cache-Control"] = "no-store"  # never reuse a stale poll
+        return response
 
     return app

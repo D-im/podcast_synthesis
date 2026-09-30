@@ -72,7 +72,7 @@ def test_new_video_creates_rows_and_page(env):
     assert ep["title"] is None and ep["duration_seconds"] is None
     assert ep["url"] == f"https://www.youtube.com/watch?v={VID}"
     page = client.get(r.headers["location"]).text
-    assert "queued" in page and page.count("pending") == 4
+    assert "Queued" in page and page.count("pending") == 4
 
 
 def test_duplicate_other_form(env):
