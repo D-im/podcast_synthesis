@@ -161,7 +161,7 @@ The worker is the only composition root. It wires adapters into ports. Core and 
 | SQLite via stdlib `sqlite3` | WAL mode, no ORM |
 | yt-dlp (with `yt-dlp[default]`) | 2026.08.19 |
 | ffmpeg, Node 22+ or Deno 2.3+ | installed on host, unbundled |
-| AssemblyAI (Universal-3.5 Pro) | SDK 1.6 |
+| AssemblyAI (model id universal-3-5-pro) | SDK 1.6 |
 | Anthropic (Claude Sonnet 5.5) | SDK 1.9 |
 | OpenAI (gpt-6.1-sol) | SDK 3.22 |
 

@@ -12,7 +12,7 @@ verifier = "fake"        # real: "openai"
 js_runtime = "node"   # "node" or "deno"
 
 [models]
-transcriber = "universal-3.5-pro"
+transcriber = "universal-3-5-pro"
 summarizer = "claude-sonnet-5-5"
 verifier = "gpt-6.1-sol"
 

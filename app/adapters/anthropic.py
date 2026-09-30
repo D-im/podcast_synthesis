@@ -122,7 +122,9 @@ class SdkClient:
             system=system,
             messages=[{"role": "user", "content": user}],
             tools=[tool],
-            tool_choice={"type": "tool", "name": tool["name"]},
+            # this model rejects a forced tool choice (HTTP 400), so ask and then validate;
+            # a reply without the tool call is caught by the caller as malformed output
+            tool_choice={"type": "auto"},
         )
         tool_input = next(
             (b.input for b in (r.content or [])

@@ -138,7 +138,7 @@ def _config_text(**over):
         ('js_runtime = "node"', "", "js_runtime"),
         ("[ytdlp]", "[ytdlp_x]", "ytdlp"),
         ('summarizer = "claude-sonnet-5-5"', "", "summarizer"),
-        ('transcriber = "universal-3.5-pro"', 'transcriber = ""', "transcriber"),
+        ('transcriber = "universal-3-5-pro"', 'transcriber = ""', "transcriber"),
         ("[fidelity]", "[fidelity_x]", "fidelity"),
     ],
 )

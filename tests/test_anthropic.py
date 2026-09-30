@@ -208,7 +208,7 @@ def test_sdk_client_builds_forced_tool_request_and_parses_response():
     sdk = StubSdk(result)
     r = sdk_call(sdk)
     assert r == Reply("msg_9", "tool_use", 7, 3, {"a": "b"})
-    assert sdk.kwargs["tool_choice"] == {"type": "tool", "name": "t"}
+    assert sdk.kwargs["tool_choice"] == {"type": "auto"}  # forced choice is a 400 on this model
     assert sdk.kwargs["system"] == "sys" and sdk.kwargs["tools"] == [TOOL]
     assert sdk.kwargs["messages"] == [{"role": "user", "content": "user"}]
 

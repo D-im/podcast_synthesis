@@ -100,7 +100,7 @@ class Clock:
 def make(client, **kw):
     clock = Clock()
     t = AssemblyAITranscriber(
-        ["universal-3.5-pro"], client_factory=lambda key: client, sleep=clock.sleep,
+        ["universal-3-5-pro"], client_factory=lambda key: client, sleep=clock.sleep,
         clock=clock, environ=kw.pop("environ", {aai.KEY_VAR: KEY}), **kw)
     return t
 

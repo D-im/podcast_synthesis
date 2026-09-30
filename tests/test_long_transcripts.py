@@ -502,9 +502,12 @@ def test_real_map_reduce_smoke(tmp_path):
     text_est = estimate_tokens(transcript_text(Transcript(segs)))
     cfg = write_config(tmp_path, token_limit=text_est - 1, chunk=text_est // 2 + 50,
                        map_out=700)
+    terse = tmp_path / "summarize_map.md"     # keeps the notes small and the test cheap
+    terse.write_text("Write at most four short bullet points noting who said what. Only use "
+                     "what the text says.")
     m = Meter()
-    page = AnthropicSummarizer("claude-sonnet-5-5", config_path=cfg).summarize(
-        Transcript(segs), m, DictCache())
+    page = AnthropicSummarizer("claude-sonnet-5-5", config_path=cfg, map_prompt_path=terse
+                               ).summarize(Transcript(segs), m, DictCache())
     assert [s.name for s in page.sections] == NAMES
     assert len(m.rows) == 3
     assert sum(r[1] for r in m.rows) < 50_000
