@@ -393,7 +393,7 @@ def test_upgrade_from_populated_v6_keeps_scores_with_null_coverage(tmp_path):
     conn.close()
     db.bootstrap(tmp_path)
     with closing(db.connect(tmp_path)) as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 8
         assert c.execute("select accuracy, coverage from fidelity_scores").fetchone() == (0.8, None)
         item = episodes.list_episodes(c)[0]
         assert item["fidelity_accuracy"] == 0.8 and item["fidelity_coverage"] is None

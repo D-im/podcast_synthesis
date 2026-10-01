@@ -2,8 +2,7 @@
 <h1>{{ status.title }}</h1>
 <p>Status: <strong>{{ status.label }}</strong></p>
 <p>Submitted: {{ status.date }}</p>
-{% if status.verdict %}<p>Verdict: {{ status.verdict }}</p>
-{% endif %}<p>Spend: <strong>{{ status.spend.total }}</strong></p>
+<p>Spend: <strong>{{ status.spend.total }}</strong></p>
 {% if status.message %}<p>Error: {{ status.message }}</p>
 {% endif %}{% if status.transcript_ready %}<p><a href="/episodes/{{ episode.video_id }}/transcript">Transcript</a></p>
 {% endif %}{% if status.can_regenerate %}<p><a href="/episodes/{{ episode.video_id }}/regenerate">Regenerate</a></p>

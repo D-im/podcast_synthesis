@@ -218,7 +218,9 @@ def list_episodes(conn: sqlite3.Connection, limit: int | None = None) -> list[di
         "WHERE o2.video_id = e.video_id)), "
         "(SELECT coverage FROM fidelity_scores f WHERE f.video_id = e.video_id "
         "AND f.version = (SELECT MAX(version) FROM one_pager_versions o2 "
-        "WHERE o2.video_id = e.video_id)) "
+        "WHERE o2.video_id = e.video_id)), "
+        "(SELECT rating FROM verdicts v WHERE v.video_id = e.video_id ORDER BY v.id DESC LIMIT 1), "
+        "(SELECT version FROM verdicts v WHERE v.video_id = e.video_id ORDER BY v.id DESC LIMIT 1) "
         "FROM episodes e ORDER BY e.created_at DESC, e.rowid DESC"
     )
     params: tuple = ()
@@ -228,7 +230,8 @@ def list_episodes(conn: sqlite3.Connection, limit: int | None = None) -> list[di
     rows = conn.execute(sql, params).fetchall()
     keys = ("video_id", "url", "title", "duration_seconds", "created_at")
     items = [dict(zip(keys, r[:5]), one_pager_version=r[5],
-                  fidelity_accuracy=r[6], fidelity_coverage=r[7], job=None) for r in rows]
+                  fidelity_accuracy=r[6], fidelity_coverage=r[7],
+                  verdict_rating=r[8], verdict_version=r[9], job=None) for r in rows]
     if not items:
         return items
     by_id = {i["video_id"]: i for i in items}
@@ -312,3 +315,35 @@ def list_one_pager_versions(conn: sqlite3.Connection, video_id: str) -> list[dic
         out.append({"version": version, "created_at": created, "model": model,
                     "prompt_hashes": parsed})
     return out
+
+
+def add_verdict(conn: sqlite3.Connection, video_id: str, version: int, rating: str,
+                reason: str) -> int | None:
+    """Store a Verdict on an existing One-Pager version; None (nothing written) if it is missing."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        exists = conn.execute(
+            "SELECT 1 FROM one_pager_versions WHERE video_id = ? AND version = ?",
+            (video_id, version)).fetchone()
+        if exists is None:
+            conn.execute("ROLLBACK")
+            return None
+        verdict_id = conn.execute(
+            "INSERT INTO verdicts (video_id, version, rating, reason, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (video_id, version, rating, reason, _now())).lastrowid
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    return verdict_id
+
+
+def list_verdicts(conn: sqlite3.Connection, video_id: str) -> list[dict]:
+    """All Verdicts for an Episode, newest first."""
+    rows = conn.execute(
+        "SELECT id, version, rating, reason, created_at FROM verdicts "
+        "WHERE video_id = ? ORDER BY id DESC", (video_id,)).fetchall()
+    return [{"id": r[0], "version": r[1], "rating": r[2], "reason": r[3], "created_at": r[4]}
+            for r in rows]

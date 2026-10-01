@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from app.config import ConfigError, DEFAULT_CONFIG_PATH, load_config
 from app.core import regenerate as core_regen
 from app.core import submit as core_submit
+from app.core import verdict as core_verdict
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
 from app.ports import OnePager, Transcript
 from app.store import artifacts, db, episodes, spend
@@ -97,6 +98,7 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             job = episodes.get_latest_job_with_steps(conn, video_id) if episode else None
             latest = episodes.latest_one_pager_version(conn, video_id) if episode else None
             versions = episodes.list_one_pager_versions(conn, video_id) if episode else []
+            verdict_rows = episodes.list_verdicts(conn, video_id) if episode else []
             can_regen = (core_regen.can_regenerate(conn, data_dir, video_id)
                          if episode else False)
             if episode is not None:
@@ -112,7 +114,17 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
                 artifacts.artifact_path(data_dir, video_id, artifacts.AUDIO))
         except ValueError:
             pass
-        status["verdict"] = None   # filled by Epic 2
+        latest_n = latest["version"] if latest else None
+        shown = []
+        for v in verdict_rows:
+            shown.append({"rating": core_verdict.label(v["rating"]), "reason": v["reason"],
+                          "version": v["version"], "date": local_datetime(v["created_at"]),
+                          "latest": v["version"] == latest_n, "latest_version": latest_n})
+        status["verdict"] = shown[0] if shown else None
+        status["verdicts_older"] = shown[1:]
+        status["verdict_form"] = {"version": latest_n} if latest_n is not None else None
+        status["verdict_error"] = None
+        status["verdict_draft"] = {"rating": "", "reason": ""}
         status["fidelity"] = None
         status["verification"] = None
         status["verification_skipped"] = None
@@ -189,6 +201,42 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             request, "episode.html",
             {"episode": episode, "status": status, "today_spend": today_spend()},
         )
+
+    @app.post("/episodes/{video_id}/verdict")
+    async def verdict_post(request: Request, video_id: str):
+        body = (await request.body()).decode("utf-8", errors="replace")
+        form = parse_qs(body, keep_blank_values=True)
+        rating = (form.get("rating") or [""])[0]
+        reason = (form.get("reason") or [""])[0]
+        raw_version = (form.get("version") or [""])[0].strip()
+
+        def work():
+            with closing(db.connect(data_dir)) as conn:
+                if episodes.get_episode(conn, video_id) is None:
+                    raise HTTPException(status_code=404, detail="Episode not found")
+                clean = core_verdict.validate(rating, reason)
+                if isinstance(clean, core_verdict.Rejected):
+                    return clean.message
+                if not re.fullmatch(r"[1-9][0-9]{0,8}", raw_version):
+                    return "That One-Pager version is not valid. Nothing was saved."
+                if episodes.add_verdict(conn, video_id, int(raw_version), clean.rating,
+                                        clean.reason) is None:
+                    return "That One-Pager version does not exist. Nothing was saved."
+                return None
+
+        try:
+            error = await run_in_threadpool(work)
+        except (sqlite3.Error, OSError):
+            error = "The database is unavailable just now. Nothing was saved."
+        if error is None:
+            return RedirectResponse(f"/episodes/{video_id}", status_code=303)
+        episode, status = await run_in_threadpool(load, video_id)
+        status["verdict_error"] = error
+        status["verdict_draft"] = {"rating": rating, "reason": reason}
+        return TEMPLATES.TemplateResponse(
+            request, "episode.html",
+            {"episode": episode, "status": status, "today_spend": today_spend()},
+            status_code=400)
 
     def regenerate_page(request: Request, video_id: str, status_code: int = 200,
                         notice: str | None = None):

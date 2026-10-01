@@ -85,6 +85,19 @@ MIGRATIONS: list[list[str]] = [
     [
         "ALTER TABLE fidelity_scores ADD COLUMN coverage REAL",
     ],
+    # 8: Verdicts, many per Episode, each on the One-Pager version it rated (Story 2.5)
+    [
+        """CREATE TABLE verdicts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_id TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            rating TEXT NOT NULL CHECK (rating IN ('worth_it', 'not_worth_it')),
+            reason TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (video_id, version) REFERENCES one_pager_versions(video_id, version)
+        )""",
+        "CREATE INDEX verdicts_episode ON verdicts(video_id, id)",
+    ],
 ]
 
 

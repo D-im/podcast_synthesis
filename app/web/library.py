@@ -38,6 +38,18 @@ def percent(accuracy) -> str | None:
     return f"{shown:g}%"
 
 
+def _verdict_text(item: dict) -> str | None:
+    from app.core.verdict import label
+    rating = item.get("verdict_rating")
+    if rating is None:
+        return None
+    text = label(rating)
+    rated, latest = item.get("verdict_version"), item.get("one_pager_version")
+    if rated is not None and latest is not None and rated != latest:
+        text += f" (v{rated})"
+    return text
+
+
 def _row(item: dict, snippet: str | None = None, thresholds=None) -> dict:
     from app.web.flags import Thresholds, flags
     status = describe_job(item, item.get("job"))
@@ -46,7 +58,7 @@ def _row(item: dict, snippet: str | None = None, thresholds=None) -> dict:
         "title": item.get("title") or item["video_id"],
         "date": local_datetime(item["created_at"]),
         "status": status["label"],
-        "verdict": None,   # filled by Epic 2
+        "verdict": _verdict_text(item),
         "fidelity": percent(item.get("fidelity_accuracy")),
         "coverage": percent(item.get("fidelity_coverage")),
         "flags": flags(item.get("fidelity_accuracy"), item.get("fidelity_coverage"),

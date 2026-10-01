@@ -1,0 +1,19 @@
+{% if status.verdict or status.verdict_form %}<section id="verdict">
+<h2>Verdict</h2>
+{% if status.verdict %}<p>Current Verdict: <strong>{{ status.verdict.rating }}</strong> - rated v{{ status.verdict.version }}{% if not status.verdict.latest %} (an earlier version; the latest is v{{ status.verdict.latest_version }}){% endif %} - {{ status.verdict.date }}</p>
+<div style="white-space: pre-wrap">{{ status.verdict.reason }}</div>
+{% endif %}{% if status.verdicts_older %}<h3>Earlier Verdicts</h3>
+<ul>
+{% for v in status.verdicts_older %}<li><strong>{{ v.rating }}</strong> - rated v{{ v.version }}{% if not v.latest %} (earlier version){% endif %} - {{ v.date }}<div style="white-space: pre-wrap">{{ v.reason }}</div></li>
+{% endfor %}</ul>
+{% endif %}{% if status.verdict_form %}<form method="post" action="/episodes/{{ episode.video_id }}/verdict">
+{% if status.verdict_error %}<p role="alert">{{ status.verdict_error }}</p>
+{% endif %}<p>This rates One-Pager v{{ status.verdict_form.version }}.</p>
+<input type="hidden" name="version" value="{{ status.verdict_form.version }}">
+<label><input type="radio" name="rating" value="worth_it"{% if status.verdict_draft.rating == "worth_it" %} checked{% endif %}> Worth it</label>
+<label><input type="radio" name="rating" value="not_worth_it"{% if status.verdict_draft.rating == "not_worth_it" %} checked{% endif %}> Not worth it</label>
+<p><label>Reason<br><textarea name="reason" rows="4" cols="60" maxlength="5000">{{ status.verdict_draft.reason }}</textarea></label></p>
+<button type="submit">Record Verdict</button>
+</form>
+{% endif %}</section>
+{% endif %}

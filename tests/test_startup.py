@@ -24,7 +24,7 @@ def test_fresh_start_creates_wal_db(tmp_path):
         "select name from sqlite_master where type='table' order by name"
     ).fetchall()
     assert tables == [("episodes",), ("fidelity_scores",), ("jobs",), ("one_pager_versions",),
-                      ("spend_ledger",), ("steps",)]
+                      ("spend_ledger",), ("sqlite_sequence",), ("steps",), ("verdicts",)]
     assert TestClient(create_app([], tmp_path)).get("/").status_code == 200
 
 
