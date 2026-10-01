@@ -1,0 +1,247 @@
+{
+  "description": "Answer key for the planted-error One-Pager (Port Alder ferry authority).",
+  "counts": {
+    "true": 14,
+    "false": 8,
+    "total": 22
+  },
+  "claims": [
+    {
+      "id": "T01",
+      "section": "Summary",
+      "text": "Dana Okafor, chief engineer of the Port Alder ferry authority, is the guest.",
+      "truth": "true",
+      "markers": [
+        "chief engineer"
+      ],
+      "evidence": "Dana Okafor, chief engineer of the Port Alder ferry authority"
+    },
+    {
+      "id": "T02",
+      "section": "Summary",
+      "text": "In 2019 the authority's board voted to postpone dredging the channel to save about four million dollars.",
+      "truth": "true",
+      "markers": [
+        "four million"
+      ],
+      "evidence": "voted to postpone dredging the channel to save about four million dollars"
+    },
+    {
+      "id": "F01",
+      "section": "Summary",
+      "text": "A city council vote of 5 to 2 backed the postponement.",
+      "truth": "false",
+      "kind": "fabricated fact",
+      "markers": [
+        "5 to 2",
+        "city council"
+      ]
+    },
+    {
+      "id": "T03",
+      "section": "Summary",
+      "text": "At low tide the channel depth fell from eleven meters to 9.1 meters.",
+      "truth": "true",
+      "markers": [
+        "9.1",
+        "eleven meters"
+      ],
+      "evidence": "the channel depth fell from eleven meters to 9.1 meters"
+    },
+    {
+      "id": "F02",
+      "section": "Summary",
+      "text": "There were 41 groundings in 2023.",
+      "truth": "false",
+      "kind": "wrong number",
+      "markers": [
+        "41"
+      ]
+    },
+    {
+      "id": "T04",
+      "section": "Summary",
+      "text": "Repairs and refunds cost about 6.2 million dollars in 2023.",
+      "truth": "true",
+      "markers": [
+        "6.2 million"
+      ],
+      "evidence": "Repairs and refunds from those groundings cost about 6.2 million dollars"
+    },
+    {
+      "id": "T05",
+      "section": "Big ideas",
+      "text": "Okafor says the authority ordered two battery-electric ferries in 2022 from a yard in Gdansk at thirty-eight million dollars each.",
+      "truth": "true",
+      "markers": [
+        "gdansk",
+        "thirty-eight"
+      ],
+      "evidence": "two battery-electric ferries from a yard in Gdansk, at thirty-eight million dollars each"
+    },
+    {
+      "id": "F03",
+      "section": "Big ideas",
+      "text": "Diesel fuel costs the authority about 9.2 million dollars a year.",
+      "truth": "false",
+      "kind": "wrong number",
+      "markers": [
+        "9.2"
+      ]
+    },
+    {
+      "id": "T06",
+      "section": "Big ideas",
+      "text": "Okafor expects the electric ferries to cut diesel fuel costs by seventy percent.",
+      "truth": "true",
+      "markers": [
+        "seventy percent"
+      ],
+      "evidence": "we expect the electric ferries to cut that by seventy percent"
+    },
+    {
+      "id": "T07",
+      "section": "Big ideas",
+      "text": "The ferries need a 22 megawatt shore-power upgrade costing twenty-seven million dollars.",
+      "truth": "true",
+      "markers": [
+        "megawatt",
+        "shore-power"
+      ],
+      "evidence": "We need a 22 megawatt shore-power upgrade, which costs twenty-seven million dollars"
+    },
+    {
+      "id": "F04",
+      "section": "Big ideas",
+      "text": "Southline Power is paying forty percent of the cost.",
+      "truth": "false",
+      "kind": "wrong entity",
+      "markers": [
+        "southline"
+      ]
+    },
+    {
+      "id": "T08",
+      "section": "Big ideas",
+      "text": "Battery capacity drops eighteen percent below minus five Celsius.",
+      "truth": "true",
+      "markers": [
+        "eighteen percent",
+        "capacity"
+      ],
+      "evidence": "Battery capacity drops eighteen percent below minus five Celsius"
+    },
+    {
+      "id": "T09",
+      "section": "Big ideas",
+      "text": "To compensate, a third charging stop was added at Fenwick Point.",
+      "truth": "true",
+      "markers": [
+        "fenwick"
+      ],
+      "evidence": "we added a third charging stop at Fenwick Point"
+    },
+    {
+      "id": "T10",
+      "section": "Big ideas",
+      "text": "The authority carries about 1.8 million riders a year.",
+      "truth": "true",
+      "markers": [
+        "1.8 million"
+      ],
+      "evidence": "We carry about 1.8 million riders a year"
+    },
+    {
+      "id": "T11",
+      "section": "Big ideas",
+      "text": "Ridership fell seven percent last year.",
+      "truth": "true",
+      "markers": [
+        "seven percent"
+      ],
+      "evidence": "Ridership fell seven percent last year"
+    },
+    {
+      "id": "F05",
+      "section": "Big ideas",
+      "text": "Delays caused all of the decline in riders.",
+      "truth": "false",
+      "kind": "exaggeration",
+      "markers": [
+        "delays caused all",
+        "all of the decline"
+      ]
+    },
+    {
+      "id": "F06",
+      "section": "Big ideas",
+      "text": "The host recommended the deferral of dredging to the board.",
+      "truth": "false",
+      "kind": "wrong speaker",
+      "markers": [
+        "the host"
+      ]
+    },
+    {
+      "id": "F07",
+      "section": "Big ideas",
+      "text": "Okafor says she would make the 2019 decision again.",
+      "truth": "false",
+      "kind": "reversed meaning",
+      "markers": [
+        "decision again"
+      ]
+    },
+    {
+      "id": "T12",
+      "section": "Actionable items",
+      "text": "Okafor advises testing batteries in the worst season first.",
+      "truth": "true",
+      "markers": [
+        "worst season"
+      ],
+      "evidence": "test batteries in the worst season first"
+    },
+    {
+      "id": "T13",
+      "section": "Notable quotes",
+      "text": "Okafor: \"I was the one who recommended the deferral, and I regret it.\"",
+      "truth": "true",
+      "markers": [
+        "regret it"
+      ],
+      "evidence": "I was the one who recommended the deferral, and I regret it"
+    },
+    {
+      "id": "T14",
+      "section": "Notable quotes",
+      "text": "Okafor: \"Price deferred maintenance honestly.\"",
+      "truth": "true",
+      "markers": [
+        "price deferred"
+      ],
+      "evidence": "Price deferred maintenance honestly"
+    },
+    {
+      "id": "F08",
+      "section": "Notable quotes",
+      "text": "Okafor: \"A ferry that cannot dock is just an expensive lighthouse.\"",
+      "truth": "false",
+      "kind": "invented quote",
+      "markers": [
+        "expensive lighthouse"
+      ]
+    }
+  ],
+  "omitted_ideas": [
+    {
+      "title": "The fishermen's co-op compromise on pile driving",
+      "markers": [
+        "co-op",
+        "fishermen",
+        "herring",
+        "pile driving"
+      ]
+    }
+  ]
+}

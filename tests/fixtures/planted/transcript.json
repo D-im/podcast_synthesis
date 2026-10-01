@@ -1,0 +1,190 @@
+{
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 7.5,
+      "text": "Welcome to Harbor Lines. Today I'm talking with Dana Okafor, chief engineer of the Port Alder ferry authority.",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 8.0,
+      "end": 15.5,
+      "text": "Thanks for having me. It has been a long few years on the water.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 16.0,
+      "end": 23.5,
+      "text": "Let's start with the decision people still argue about. What happened in 2019?",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 24.0,
+      "end": 31.5,
+      "text": "In 2019 the board voted to postpone dredging the channel to save about four million dollars.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 32.0,
+      "end": 39.5,
+      "text": "I was the one who recommended the deferral, and I regret it.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 40.0,
+      "end": 47.5,
+      "text": "What did that do to the channel?",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 48.0,
+      "end": 55.5,
+      "text": "At low tide the channel depth fell from eleven meters to 9.1 meters.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 56.0,
+      "end": 63.5,
+      "text": "And what were the consequences for the ferries?",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 64.0,
+      "end": 71.5,
+      "text": "We had fourteen groundings in 2023.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 72.0,
+      "end": 79.5,
+      "text": "Repairs and refunds from those groundings cost about 6.2 million dollars in 2023.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 80.0,
+      "end": 87.5,
+      "text": "Meanwhile you ordered new boats.",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 88.0,
+      "end": 95.5,
+      "text": "In 2022 we ordered two battery-electric ferries from a yard in Gdansk, at thirty-eight million dollars each.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 96.0,
+      "end": 103.5,
+      "text": "Why go electric?",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 104.0,
+      "end": 111.5,
+      "text": "Diesel fuel costs us about 2.9 million dollars a year, and we expect the electric ferries to cut that by seventy percent.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 112.0,
+      "end": 119.5,
+      "text": "Can the docks handle the charging?",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 120.0,
+      "end": 127.5,
+      "text": "Not yet. We need a 22 megawatt shore-power upgrade, which costs twenty-seven million dollars.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 128.0,
+      "end": 135.5,
+      "text": "Northline Power is paying forty percent of that.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 136.0,
+      "end": 143.5,
+      "text": "Any surprises with the batteries?",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 144.0,
+      "end": 151.5,
+      "text": "Battery capacity drops eighteen percent below minus five Celsius.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 152.0,
+      "end": 159.5,
+      "text": "To compensate we added a third charging stop at Fenwick Point.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 160.0,
+      "end": 167.5,
+      "text": "Tell me about the passengers.",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 168.0,
+      "end": 175.5,
+      "text": "We carry about 1.8 million riders a year.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 176.0,
+      "end": 183.5,
+      "text": "Ridership fell seven percent last year, and most of that was caused by delays.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 184.0,
+      "end": 191.5,
+      "text": "I hear the fishermen were worried about the construction.",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 192.0,
+      "end": 199.5,
+      "text": "We reached a compromise with the fishermen's co-op. Pile driving only happens from October to March.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 200.0,
+      "end": 207.5,
+      "text": "That is outside the April to September herring season, and in return the co-op gives us staging access to its pier.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 208.0,
+      "end": 215.5,
+      "text": "What would you tell other ferry operators?",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 216.0,
+      "end": 223.5,
+      "text": "Price deferred maintenance honestly. Do not treat it as free money.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 224.0,
+      "end": 231.5,
+      "text": "And test batteries in the worst season first, not the easiest one.",
+      "speaker": "Speaker B"
+    },
+    {
+      "start": 232.0,
+      "end": 239.5,
+      "text": "Dana Okafor, thank you for your time.",
+      "speaker": "Speaker A"
+    },
+    {
+      "start": 240.0,
+      "end": 247.5,
+      "text": "My pleasure.",
+      "speaker": "Speaker B"
+    }
+  ]
+}

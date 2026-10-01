@@ -1,0 +1,26 @@
+{
+  "sections": [
+    {
+      "name": "Summary",
+      "text": "Dana Okafor, chief engineer of the Port Alder ferry authority, is the guest. In 2019 the authority's board voted to postpone dredging the channel to save about four million dollars. A city council vote of 5 to 2 backed the postponement. At low tide the channel depth fell from eleven meters to 9.1 meters. There were 41 groundings in 2023. Repairs and refunds cost about 6.2 million dollars in 2023."
+    },
+    {
+      "name": "Big ideas",
+      "text": "Okafor says the authority ordered two battery-electric ferries in 2022 from a yard in Gdansk at thirty-eight million dollars each. Diesel fuel costs the authority about 9.2 million dollars a year. Okafor expects the electric ferries to cut diesel fuel costs by seventy percent. The ferries need a 22 megawatt shore-power upgrade costing twenty-seven million dollars. Southline Power is paying forty percent of the cost. Battery capacity drops eighteen percent below minus five Celsius. To compensate, a third charging stop was added at Fenwick Point. The authority carries about 1.8 million riders a year. Ridership fell seven percent last year. Delays caused all of the decline in riders. The host recommended the deferral of dredging to the board. Okafor says she would make the 2019 decision again."
+    },
+    {
+      "name": "Actionable items",
+      "text": "Okafor advises testing batteries in the worst season first."
+    },
+    {
+      "name": "Notable quotes",
+      "text": "Okafor: \"I was the one who recommended the deferral, and I regret it.\"\nOkafor: \"Price deferred maintenance honestly.\"\nOkafor: \"A ferry that cannot dock is just an expensive lighthouse.\""
+    },
+    {
+      "name": "Worth your time",
+      "text": "Listeners who run transport infrastructure will get the most from it."
+    }
+  ],
+  "model": "fixture",
+  "prompt_hashes": {}
+}
