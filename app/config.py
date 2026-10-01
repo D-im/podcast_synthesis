@@ -33,6 +33,8 @@ class Config:
     anthropic_max_output_tokens: int = 4096
     map_chunk_tokens: int = 60000
     map_output_tokens: int = 4096
+    compress_before_upload: bool = True
+    upload_bitrate_kbps: int = 32
 
 
 JS_RUNTIMES = ("node", "deno")
@@ -126,6 +128,13 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
         raise ConfigError(f"{path}: [assemblyai] 'speaker_labels' must be true or false")
     poll = _positive(aai, "poll_interval_seconds", 5.0, "assemblyai", path)
     max_wait = _positive(aai, "max_wait_minutes", 180.0, "assemblyai", path)
+    compress = aai.get("compress_before_upload", True)
+    if not isinstance(compress, bool):
+        raise ConfigError(f"{path}: [assemblyai] 'compress_before_upload' must be true or false")
+    bitrate = aai.get("upload_bitrate_kbps", 32)
+    if isinstance(bitrate, bool) or not isinstance(bitrate, int) or not 16 <= bitrate <= 128:
+        raise ConfigError(
+            f"{path}: [assemblyai] 'upload_bitrate_kbps' must be an integer from 16 to 128")
     pricing = _optional_table(data, "pricing", path)
     per_hour = _positive(pricing, "transcription_usd_per_hour", 0.23, "pricing", path,
                          allow_zero=True)
@@ -153,6 +162,8 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
         anthropic_max_output_tokens=max_out,
         js_runtime=runtime,
         speaker_labels=labels,
+        compress_before_upload=compress,
+        upload_bitrate_kbps=bitrate,
         poll_interval_seconds=poll,
         max_wait_minutes=max_wait,
         transcription_usd_per_hour=per_hour,

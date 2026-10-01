@@ -273,13 +273,14 @@ def test_non_finite_duration_fails_before_publishing(dest, duration):
     assert listing(dest) == []  # nothing left at dest
 
 
-def test_fake_config_matches_real_config_except_downloader():
+def test_fake_config_matches_real_config_except_providers():
     import tomllib
     root = Path(__file__).resolve().parent
     real = tomllib.loads((root.parent / "config.toml").read_text())
     fake = tomllib.loads((root / "fake_config.toml").read_text())
-    assert fake["providers"]["downloader"] == "fake"
-    real["providers"]["downloader"] = fake["providers"]["downloader"]
+    assert set(fake["providers"].values()) == {"fake"}
+    assert set(real["providers"]) == set(fake["providers"])
+    real.pop("providers"); fake.pop("providers")      # providers differ on purpose
     assert real == fake
 
 

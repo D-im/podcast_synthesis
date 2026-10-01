@@ -132,7 +132,7 @@ def _config_text(**over):
         ("token_limit = 150000", "token_limit = 0", "token_limit"),
         ("accuracy_threshold = 0.9", "accuracy_threshold = 1.5", "accuracy_threshold"),
         ("coverage_threshold = 0.75", "coverage_threshold = -0.1", "coverage_threshold"),
-        ('verifier = "fake"', "", "verifier"),
+        ('verifier = "none"', "", "verifier"),
         ('downloader = "yt-dlp"', "", "downloader"),
         ('js_runtime = "node"', 'js_runtime = "bun"', "js_runtime"),
         ('js_runtime = "node"', "", "js_runtime"),

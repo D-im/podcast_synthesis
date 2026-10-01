@@ -343,8 +343,8 @@ def test_bad_new_config_keys_rejected(tmp_path, old, new):
         load_config(cfg)
 
 
-def test_real_config_defaults_to_fake_transcriber():
-    assert load_config().providers["transcriber"] == "fake"
+def test_real_config_uses_the_real_transcriber():
+    assert load_config().providers["transcriber"] == "assemblyai"
 
 
 # --- network smoke test ---
@@ -562,3 +562,213 @@ def test_transcript_page_with_corrupt_artifact_is_404_not_500(data):
                          {"segments": [{"start": "soon", "end": 1, "text": "x"}]})
     client = TestClient(create_app([], data))
     assert client.get(f"/episodes/{VID}/transcript").status_code == 404
+
+
+# --- found in the first supervised real run (Story 1.11) ---
+
+def test_audio_is_compressed_before_upload_and_the_copy_is_removed(tmp_path):
+    audio = tmp_path / "audio.m4a"
+    audio.write_bytes(b"x" * 1000)
+    seen = {}
+
+    def compressor(src, dest, kbps):
+        seen["args"] = (src, dest.name, kbps)
+        dest.write_bytes(b"y" * 100)
+
+    class Client(ScriptedClient):
+        def submit(self, audio_path):
+            seen["uploaded"] = (audio_path.name, audio_path.stat().st_size)
+            return super().submit(audio_path)
+
+    t = AssemblyAITranscriber(["m"], client_factory=lambda k: Client([DONE]), compressor=compressor,
+                              upload_bitrate_kbps=24, environ={aai.KEY_VAR: KEY},
+                              sleep=lambda s: None)
+    t.transcribe(audio, Meter(), Resume())
+    assert seen["args"] == (audio, ".upload-audio.m4a", 24)
+    assert seen["uploaded"] == (".upload-audio.m4a", 100)       # the small copy was sent
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["audio.m4a"]  # copy removed
+    assert audio.read_bytes() == b"x" * 1000                            # original untouched
+
+
+@pytest.mark.parametrize("failure", [FileNotFoundError("ffmpeg"), RuntimeError("bad"),
+                                     "empty"])
+def test_compression_failure_falls_back_to_the_original(tmp_path, failure):
+    audio = tmp_path / "audio.m4a"
+    audio.write_bytes(b"x" * 10)
+
+    def compressor(src, dest, kbps):
+        if failure == "empty":
+            dest.write_bytes(b"")
+        else:
+            raise failure
+
+    sent = []
+
+    class Client(ScriptedClient):
+        def submit(self, audio_path):
+            sent.append(audio_path.name)
+            return super().submit(audio_path)
+
+    t = AssemblyAITranscriber(["m"], client_factory=lambda k: Client([DONE]), compressor=compressor,
+                              environ={aai.KEY_VAR: KEY}, sleep=lambda s: None)
+    t.transcribe(audio, Meter(), Resume())
+    assert sent == ["audio.m4a"] and sorted(p.name for p in tmp_path.iterdir()) == ["audio.m4a"]
+
+
+def test_no_compression_when_resuming_or_when_switched_off(tmp_path):
+    audio = tmp_path / "audio.m4a"
+    audio.write_bytes(b"x")
+    calls = []
+    comp = lambda src, dest, kbps: calls.append(1)
+    t = AssemblyAITranscriber(["m"], client_factory=lambda k: ScriptedClient([DONE]),
+                              compressor=comp, environ={aai.KEY_VAR: KEY}, sleep=lambda s: None)
+    t.transcribe(audio, Meter(), Resume("saved-id"))        # resuming: nothing to upload
+    off = AssemblyAITranscriber(["m"], client_factory=lambda k: ScriptedClient([DONE]),
+                                compress_before_upload=False, compressor=comp,
+                                environ={aai.KEY_VAR: KEY}, sleep=lambda s: None)
+    off.transcribe(audio, Meter(), Resume())
+    assert calls == []
+
+
+def test_upload_failure_shows_the_vendor_reason_without_urls_or_the_key():
+    class TranscriptError(Exception):
+        pass
+    TranscriptError.__module__ = "assemblyai.types"
+    err = TranscriptError(
+        "failed to transcribe url https://cdn.assemblyai.com/upload/abc-123: "
+        "audio file could not be processed")
+    mapped = aai.SdkClient._map(err)
+    assert isinstance(mapped, Transient)
+    assert "audio file could not be processed" in str(mapped)
+    assert "https://" not in str(mapped) and KEY not in str(mapped)
+    with pytest.raises(StepError) as e:
+        run(ScriptedClient(submit_error=mapped))
+    assert "audio file could not be processed" in e.value.message and e.value.retryable
+
+
+def test_unexpected_exception_text_is_not_shown():
+    assert "secret" not in str(aai.SdkClient._map(RuntimeError("secret " + KEY)))
+
+
+def test_ffmpeg_compress_really_shrinks_speech_audio(tmp_path):
+    import shutil
+    import subprocess
+    if not shutil.which("ffmpeg") or not shutil.which("say"):
+        pytest.skip("needs ffmpeg and macOS say")
+    src = tmp_path / "in.aiff"
+    subprocess.run(["say", "-o", str(src), "Hello there. This is a short test of compression."],
+                   check=True)
+    big = tmp_path / "big.m4a"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-b:a", "128k",
+                    str(big)], check=True)
+    small = tmp_path / "small.m4a"
+    aai.ffmpeg_compress(big, small, 32)
+    assert 0 < small.stat().st_size < big.stat().st_size
+
+
+@pytest.mark.parametrize("old,new,key", [
+    ("compress_before_upload = true", "compress_before_upload = 1", "compress_before_upload"),
+    ("upload_bitrate_kbps = 32", "upload_bitrate_kbps = 15", "upload_bitrate_kbps"),
+    ("upload_bitrate_kbps = 32", "upload_bitrate_kbps = true", "upload_bitrate_kbps"),
+    ("upload_bitrate_kbps = 32", "upload_bitrate_kbps = 129", "upload_bitrate_kbps"),
+    ("upload_bitrate_kbps = 32", 'upload_bitrate_kbps = "x"', "upload_bitrate_kbps"),
+])
+def test_bad_upload_config_rejected(tmp_path, old, new, key):
+    f = tmp_path / "c.toml"
+    f.write_text((ROOT / "fake_config.toml").read_text().replace(old, new))
+    with pytest.raises(Exception, match=key):
+        load_config(f)
+
+
+def test_a_compressed_copy_that_is_not_smaller_is_not_used(tmp_path):
+    audio = tmp_path / "audio.m4a"
+    audio.write_bytes(b"x" * 100)
+    sent = []
+
+    class Client(ScriptedClient):
+        def submit(self, audio_path):
+            sent.append(audio_path.name)
+            return super().submit(audio_path)
+
+    def compressor(src, dest, kbps):
+        dest.write_bytes(b"y" * 500)          # bigger than the source
+
+    t = AssemblyAITranscriber(["m"], client_factory=lambda k: Client([DONE]), compressor=compressor,
+                              environ={aai.KEY_VAR: KEY}, sleep=lambda s: None)
+    t.transcribe(audio, Meter(), Resume())
+    assert sent == ["audio.m4a"] and sorted(p.name for p in tmp_path.iterdir()) == ["audio.m4a"]
+
+
+def test_compression_failure_is_logged_not_silent(tmp_path, caplog):
+    audio = tmp_path / "audio.m4a"
+    audio.write_bytes(b"x")
+
+    def compressor(src, dest, kbps):
+        raise RuntimeError("ffmpeg exited with 1: Unknown encoder")
+
+    t = AssemblyAITranscriber(["m"], client_factory=lambda k: ScriptedClient([DONE]),
+                              compressor=compressor, environ={aai.KEY_VAR: KEY},
+                              sleep=lambda s: None)
+    with caplog.at_level("WARNING", logger="app.adapters.assemblyai"):
+        t.transcribe(audio, Meter(), Resume())
+    assert "uploading the original" in caplog.text and "Unknown encoder" in caplog.text
+    assert KEY not in caplog.text
+
+
+def test_ffmpeg_compress_command_and_failure_modes(tmp_path, monkeypatch):
+    import subprocess
+    calls = {}
+
+    def fake_run(argv, **kw):
+        calls["argv"], calls["kw"] = argv, kw
+        return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+    monkeypatch.setattr(aai.shutil, "which", lambda name: "/usr/bin/ffmpeg")
+    monkeypatch.setattr(aai.subprocess, "run", fake_run)
+    aai.ffmpeg_compress(tmp_path / "in.m4a", tmp_path / "out.m4a", 24)
+    a = calls["argv"]
+    assert a[0] == "/usr/bin/ffmpeg" and a[a.index("-ac") + 1] == "1"
+    assert a[a.index("-ar") + 1] == "16000" and a[a.index("-b:a") + 1] == "24k"
+    assert "-vn" in a and a[-1].endswith("out.m4a") and calls["kw"]["check"] is True
+    assert calls["kw"]["timeout"] <= 600
+
+    def failing(argv, **kw):
+        raise subprocess.CalledProcessError(1, argv, stderr=b"Unknown encoder 'aac'")
+
+    monkeypatch.setattr(aai.subprocess, "run", failing)
+    with pytest.raises(RuntimeError, match="exited with 1.*Unknown encoder"):
+        aai.ffmpeg_compress(tmp_path / "in.m4a", tmp_path / "out.m4a", 24)
+    monkeypatch.setattr(aai.shutil, "which", lambda name: None)
+    with pytest.raises(FileNotFoundError):
+        aai.ffmpeg_compress(tmp_path / "in.m4a", tmp_path / "out.m4a", 24)
+
+
+def test_describe_redacts_the_configured_key(monkeypatch):
+    class TranscriptError(Exception):
+        pass
+    TranscriptError.__module__ = "assemblyai.types"
+    monkeypatch.setenv(aai.KEY_VAR, KEY)
+    assert KEY not in aai._describe(TranscriptError(f"bad header {KEY}"))
+
+
+def test_generic_submit_failure_message_uses_describe(tmp_path):
+    with pytest.raises(StepError) as e:
+        run(ScriptedClient(submit_error=RuntimeError("boom " + KEY)))
+    assert "RuntimeError" in e.value.message and KEY not in e.value.message
+
+
+def test_from_config_passes_the_upload_settings(tmp_path):
+    f = tmp_path / "c.toml"
+    f.write_text((ROOT / "fake_config.toml").read_text()
+                 .replace("compress_before_upload = true", "compress_before_upload = false")
+                 .replace("upload_bitrate_kbps = 32", "upload_bitrate_kbps = 24"))
+    t = AssemblyAITranscriber.from_config(load_config(f))
+    assert t.compress_before_upload is False and t.upload_bitrate_kbps == 24
+
+
+def test_shipped_config_builds_real_adapters_with_no_verifier():
+    adapters = build_adapters(load_config())
+    assert type(adapters.transcriber).__name__ == "AssemblyAITranscriber"
+    assert type(adapters.summarizer).__name__ == "AnthropicSummarizer"
+    assert type(adapters.downloader).__name__ == "YtDlpDownloader"
+    assert adapters.verifier is None

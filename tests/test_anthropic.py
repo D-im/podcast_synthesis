@@ -287,8 +287,8 @@ def test_build_adapters_accepts_anthropic_and_fake(tmp_path):
                 ).__name__ == "FakeSummarizer"
 
 
-def test_real_config_defaults_to_fake_summarizer_and_matches_fake_config():
-    assert load_config().providers["summarizer"] == "fake"
+def test_real_config_uses_the_real_summarizer_and_matches_fake_config_settings():
+    assert load_config().providers["summarizer"] == "anthropic"
     a, b = load_config(), load_config(ROOT / "fake_config.toml")
     assert (a.summarizer_input_usd_per_million, a.summarizer_output_usd_per_million,
             a.anthropic_max_output_tokens) == (

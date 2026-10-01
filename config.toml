@@ -4,9 +4,9 @@ token_limit = 150000
 
 [providers]
 downloader = "yt-dlp"    # or "fake"
-transcriber = "fake"     # real: "assemblyai"
-summarizer = "fake"      # real: "anthropic"
-verifier = "fake"        # real: "openai"
+transcriber = "assemblyai"   # or "fake"
+summarizer = "anthropic"     # or "fake"
+verifier = "none"            # "none" until the real Verifier arrives (Epic 2); or "fake"
 
 [ytdlp]
 js_runtime = "node"   # "node" or "deno"
@@ -20,6 +20,8 @@ verifier = "gpt-6.1-sol"
 speaker_labels = true
 poll_interval_seconds = 5
 max_wait_minutes = 180
+compress_before_upload = true   # re-encode to mono 16 kHz before uploading (about 4x less to send)
+upload_bitrate_kbps = 32
 
 [anthropic]
 max_output_tokens = 4096

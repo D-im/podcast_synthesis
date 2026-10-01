@@ -13,3 +13,10 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-generate-the-one-pager.md`
   summary: Decide how to handle Episodes that have a legacy `one_pager.json` but no `one_pager_versions` row (adopt as v1, or re-run summarize).
   evidence: `finished("summarize")` and the page look only at versioned files and rows; re-queuing such an Episode re-runs summarize and spends money, and the page shows a notice instead of the One-Pager. Affects only data created before Story 1.8.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-first-supervised-real-run.md`
+  summary: Find the root cause of the app's 59 MB AssemblyAI submit failing after about 16 minutes (opaque error at the time), and consider uploading from a faster path.
+  evidence: Compressed audio uploads fine (16.8 MB in about 220 s) and the failure message now includes the vendor reason, so a recurrence will be diagnosable; upload speed to the vendor was about 75 KB/s against a 15.8 Mbps link.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-first-supervised-real-run.md`
+  summary: Consider a prompt change so long episodes get a per-section length allowance and fewer dropped sub-topics (the first real One-Pager omitted Argentina, the deficit argument and the youth-vote figures).
+  evidence: 28-claim check in `real-run-1-11.md` found no invented claims but several missed topics; the Epic 2 coverage check will measure this.

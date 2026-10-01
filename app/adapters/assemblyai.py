@@ -5,7 +5,11 @@ same job instead of paying again. Only `SdkClient` touches the SDK; tests replac
 """
 from __future__ import annotations
 
+import logging
 import os
+import re
+import shutil
+import subprocess
 import time
 from dataclasses import dataclass
 from decimal import Decimal
@@ -14,6 +18,8 @@ from typing import Callable, Protocol
 
 from app.core.meter import to_micro
 from app.ports import Meter, Resume, Segment, StepError, Transcript
+
+log = logging.getLogger(__name__)
 
 PROVIDER = "assemblyai"
 KEY_VAR = "ASSEMBLYAI_API_KEY"
@@ -54,6 +60,22 @@ class Client(Protocol):
     def sentences(self, job_id: str) -> list[Segment]: ...
 
 
+_URL = re.compile(r"https?://\S+")
+
+
+def _describe(exc: BaseException, limit: int = 200) -> str:
+    """Short, URL-free text for an error, so the real cause is visible in the step message."""
+    # only the vendor SDK's and the HTTP library's own messages are shown; they carry the
+    # reason (for example a rejected setting) and never the key. Anything else: class name only.
+    shown = type(exc).__module__.split(".")[0] in ("assemblyai", "httpx", "httpcore")
+    text = " ".join(_URL.sub("<url>", str(exc)).split()) if shown else ""
+    key = os.environ.get(KEY_VAR)
+    if key and text:
+        text = text.replace(key, "[redacted]")
+    text = f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 class _HttpError(Exception):
     def __init__(self, status_code: int):
         super().__init__(f"HTTP {status_code}")
@@ -92,7 +114,7 @@ class SdkClient:
             return Transient(f"HTTP {code}")
         if isinstance(code, int) and 400 <= code < 500:
             return Refused(f"HTTP {code}")
-        return Transient(type(exc).__name__)
+        return Transient(_describe(exc))
 
     def submit(self, audio_path: Path) -> str:
         try:
@@ -153,6 +175,22 @@ def cost_micro_usd(duration_seconds: float, usd_per_hour: float) -> int:
     return to_micro(usd)
 
 
+def ffmpeg_compress(src: Path, dest: Path, bitrate_kbps: int) -> None:
+    """Re-encode to mono 16 kHz AAC, which is plenty for speech and far smaller to upload."""
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        raise FileNotFoundError("ffmpeg")
+    try:
+        subprocess.run(
+            [exe, "-y", "-loglevel", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", "16000",
+             "-c:a", "aac", "-b:a", f"{bitrate_kbps}k", str(dest)],
+            check=True, capture_output=True, timeout=600,
+        )
+    except subprocess.CalledProcessError as e:
+        tail = (e.stderr or b"").decode(errors="replace").strip()[-200:]
+        raise RuntimeError(f"ffmpeg exited with {e.returncode}: {tail}") from None
+
+
 def _rejected() -> StepError:
     return StepError(f"AssemblyAI rejected the API key; check {KEY_VAR}", True)
 
@@ -165,6 +203,9 @@ class AssemblyAITranscriber:
         usd_per_hour: float = 0.23,
         poll_interval_seconds: float = 5.0,
         max_wait_minutes: float = 180.0,
+        compress_before_upload: bool = True,
+        upload_bitrate_kbps: int = 32,
+        compressor: Callable[[Path, Path, int], None] | None = None,
         client_factory: Callable[[str], Client] | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
@@ -177,6 +218,9 @@ class AssemblyAITranscriber:
         self.client_factory = client_factory or (
             lambda key: SdkClient(key, speech_models, speaker_labels)
         )
+        self.compress_before_upload = compress_before_upload
+        self.upload_bitrate_kbps = upload_bitrate_kbps
+        self.compressor = compressor or ffmpeg_compress
         self.sleep = sleep
         self.clock = clock
         self.environ = os.environ if environ is None else environ
@@ -189,6 +233,8 @@ class AssemblyAITranscriber:
             usd_per_hour=config.transcription_usd_per_hour,
             poll_interval_seconds=config.poll_interval_seconds,
             max_wait_minutes=config.max_wait_minutes,
+            compress_before_upload=config.compress_before_upload,
+            upload_bitrate_kbps=config.upload_bitrate_kbps,
         )
 
     def transcribe(self, audio_path: Path, meter: Meter, resume: Resume) -> Transcript:
@@ -199,7 +245,7 @@ class AssemblyAITranscriber:
 
         job_id = resume.load()
         if not job_id:
-            job_id = self._submit(client, audio_path)
+            job_id = self._upload(client, audio_path)
             resume.save(job_id)
         status = self._wait(client, job_id, resume)
 
@@ -227,6 +273,27 @@ class AssemblyAITranscriber:
             raise StepError("AssemblyAI returned no speech for this audio", False)
         return Transcript(tuple(segments))
 
+    def _upload(self, client: Client, audio_path: Path) -> str:
+        """Send the audio, re-encoded smaller when possible. The original file is never touched."""
+        if not self.compress_before_upload:
+            return self._submit(client, audio_path)
+        small = audio_path.with_name(f".upload-{audio_path.stem}.m4a")
+        try:
+            try:
+                self.compressor(audio_path, small, self.upload_bitrate_kbps)
+                usable = small.is_file() and 0 < small.stat().st_size < audio_path.stat().st_size
+                send = small if usable else audio_path
+            except Exception as e:  # an optimisation only: fall back to the original audio
+                log.warning("audio compression failed, uploading the original (%s)",
+                            _describe(e) if not isinstance(e, RuntimeError) else str(e)[:300])
+                send = audio_path
+            return self._submit(client, send)
+        finally:
+            try:
+                small.unlink()
+            except OSError:
+                pass
+
     def _submit(self, client: Client, audio_path: Path) -> str:
         try:
             return client.submit(audio_path)
@@ -237,7 +304,7 @@ class AssemblyAITranscriber:
         except Refused as e:
             raise StepError(f"AssemblyAI refused the audio ({e})", False) from None
         except Exception as e:
-            raise StepError(f"could not submit audio to AssemblyAI ({type(e).__name__})",
+            raise StepError(f"could not submit audio to AssemblyAI ({_describe(e)})",
                             True) from None
 
     def _wait(self, client: Client, job_id: str, resume: Resume) -> JobStatus:
