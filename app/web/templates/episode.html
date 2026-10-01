@@ -5,4 +5,5 @@
 <p>Source: {% if episode.url.startswith(("http://", "https://")) %}<a href="{{ episode.url }}">{{ episode.url }}</a>{% else %}{{ episode.url }}{% endif %}</p>
 {% include "_status.html" %}
 {% include "_verdict.html" %}
+{% include "_speakers.html" %}
 {% endblock %}

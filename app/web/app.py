@@ -16,6 +16,7 @@ from app.config import ConfigError, DEFAULT_CONFIG_PATH, load_config
 from app.core import admission as core_admission
 from app.core import guard as core_guard
 from app.core import regenerate as core_regen
+from app.core import speakers as core_speakers
 from app.core.budget import check_budget, today_micro
 from app.core import submit as core_submit
 from app.core import verdict as core_verdict
@@ -161,6 +162,8 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         status["verdicts_older"] = shown[1:]
         status["verdict_form"] = {"version": latest_n} if latest_n is not None else None
         status["verdict_error"] = None
+        status["speakers"] = speaker_context(video_id)
+        status["speakers_error"] = None
         status["verdict_draft"] = {"rating": "", "reason": ""}
         status["fidelity"] = None
         status["verification"] = None
@@ -304,6 +307,60 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             {"episode": episode, "status": status, "today_spend": today_spend(),
              "retry_notice": RETRY_MESSAGES[outcome]}, status_code=409)
 
+    def speaker_context(video_id: str):
+        """Labels in the stored Transcript with their saved names, or None when not available."""
+        try:
+            transcript = Transcript.from_dict(artifacts.read_json(
+                artifacts.artifact_path(data_dir, video_id, artifacts.TRANSCRIPT)))
+        except (ValueError, OSError, KeyError, TypeError, OverflowError, RecursionError):
+            return None
+        found = core_speakers.labels(transcript)
+        if not found:
+            return None
+        with closing(db.connect(data_dir)) as conn:
+            saved = episodes.get_speaker_names(conn, video_id)
+        return {"labels": [{"label": x, "name": saved.get(x, "")} for x in found]}
+
+    @app.post("/episodes/{video_id}/speakers")
+    async def speakers_post(request: Request, video_id: str):
+        body = (await request.body()).decode("utf-8", errors="replace")
+        form = parse_qs(body, keep_blank_values=True)
+
+        def work():
+            with closing(db.connect(data_dir)) as conn:
+                if episodes.get_episode(conn, video_id) is None:
+                    raise HTTPException(status_code=404, detail="Episode not found")
+            ctx = speaker_context(video_id)
+            if ctx is None:
+                return 409, "This Episode has no stored speaker labels to name."
+            known = [x["label"] for x in ctx["labels"]]
+            raw = {k[len("name_"):]: v[0] for k, v in form.items()
+                   if k.startswith("name_") and v}
+            clean = core_speakers.validate(raw, known)
+            if isinstance(clean, str):
+                return 400, clean
+            with closing(db.connect(data_dir)) as conn:
+                episodes.set_speaker_names(conn, video_id, clean)
+            return 303, None
+
+        try:
+            code, error = await run_in_threadpool(work)
+        except (sqlite3.Error, OSError):
+            code, error = 503, "The database is unavailable just now. Nothing was saved."
+        if code == 303:
+            return RedirectResponse(f"/episodes/{video_id}", status_code=303)
+        episode, status = await run_in_threadpool(load, video_id)
+        status["speakers_error"] = error
+        if status.get("speakers"):
+            typed = {k[len("name_"):]: v[0] for k, v in form.items()
+                     if k.startswith("name_") and v}
+            for row in status["speakers"]["labels"]:
+                row["name"] = typed.get(row["label"], row["name"])
+        return TEMPLATES.TemplateResponse(
+            request, "episode.html",
+            {"episode": episode, "status": status, "today_spend": today_spend()},
+            status_code=code)
+
     @app.post("/episodes/{video_id}/verdict")
     async def verdict_post(request: Request, video_id: str):
         body = (await request.body()).decode("utf-8", errors="replace")
@@ -355,13 +412,15 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
                         notice: str | None = None):
         """The confirmation page. Read-only: it never queues anything."""
         ctx = {"video_id": video_id, "title": video_id, "message": None, "notice": notice,
-               "estimate": None, "today_spend": today_spend()}
+               "estimate": None, "today_spend": today_spend(), "speaker_names": []}
         try:
             with closing(db.connect(data_dir)) as conn:
                 episode = episodes.get_episode(conn, video_id)
                 if episode is None:
                     raise HTTPException(status_code=404, detail="Episode not found")
                 ctx["title"] = episode.get("title") or video_id
+                ctx["speaker_names"] = sorted(set(episodes.get_speaker_names(
+                    conn, video_id).values()))
                 try:
                     core_regen.check_preconditions(conn, data_dir, video_id)
                 except core_regen.Blocked as e:
@@ -527,9 +586,12 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         try:
             path = artifacts.artifact_path(data_dir, video_id, artifacts.TRANSCRIPT)
             transcript = Transcript.from_dict(artifacts.read_json(path))
+            with closing(db.connect(data_dir)) as conn:
+                saved = episodes.get_speaker_names(conn, video_id)
+            shown = core_speakers.apply(transcript, saved)
             lines = [{"time": format_timestamp(s.start), "speaker": s.speaker, "text": s.text}
-                     for s in transcript.segments]
-        except (ValueError, OSError, KeyError, TypeError, OverflowError):
+                     for s in shown.segments]
+        except (ValueError, OSError, KeyError, TypeError, OverflowError, sqlite3.Error):
             raise HTTPException(status_code=404, detail="Transcript not found") from None
         with closing(db.connect(data_dir)) as conn:
             episode = episodes.get_episode(conn, video_id)

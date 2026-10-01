@@ -191,7 +191,7 @@ def test_migration_from_schema_7(tmp_path):
         conn.execute(f"PRAGMA user_version = {v}")
     conn.execute("INSERT INTO episodes (video_id, url, created_at) VALUES ('a','u','t')")
     migrations.migrate(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 11
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 12
     assert conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0] == 1
     assert conn.execute("SELECT COUNT(*) FROM verdicts").fetchone()[0] == 0
 

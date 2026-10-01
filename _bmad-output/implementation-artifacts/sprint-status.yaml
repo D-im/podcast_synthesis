@@ -63,3 +63,7 @@ development_status:
   3-3-refuse-a-submission-that-would-exceed-the-daily-cap: done
   3-4-pause-a-job-that-hits-the-cap-mid-run-and-resume-it-on-reque: done
   epic-3-retrospective: optional
+
+  epic-4: in-progress
+  4-1-name-the-speakers: review
+  epic-4-retrospective: optional

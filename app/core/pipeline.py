@@ -5,7 +5,7 @@ import sqlite3
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
-from app.core import guard
+from app.core import guard, speakers
 from app.core.meter import StepMeter
 from app.core.submit import STEP_NAMES
 from app.ports import Adapters, OnePager, StepError, StepSkipped, Transcript
@@ -95,8 +95,11 @@ def run_job(
             )
         elif name == "summarize":
             transcript = Transcript.from_dict(artifacts.read_json(path("transcribe")))
+            names = episodes.get_speaker_names(conn, video_id)
+            names = {k: v for k, v in names.items() if k in speakers.labels(transcript)}
             one_pager = adapters.summarizer.summarize(
-                transcript, meter, artifacts.notes_cache(data_dir, video_id))
+                speakers.apply(transcript, names), meter,
+                artifacts.notes_cache(data_dir, video_id))
             latest = episodes.latest_one_pager_version(conn, video_id)
             version = max(latest["version"] if latest else 0,
                           artifacts.latest_one_pager_file_version(data_dir, video_id)) + 1
@@ -104,7 +107,7 @@ def run_job(
             artifacts.write_json(artifacts.one_pager_path(data_dir, video_id, version),
                                  one_pager.to_dict())
             episodes.add_one_pager_version(
-                conn, video_id, version, one_pager.model, one_pager.prompt_hashes)
+                conn, video_id, version, one_pager.model, one_pager.prompt_hashes, names)
         elif name == "verify":
             transcript = Transcript.from_dict(artifacts.read_json(path("transcribe")))
             latest = episodes.latest_one_pager_version(conn, video_id)
@@ -114,8 +117,10 @@ def run_job(
             if not artifacts.exists(latest_path):
                 raise StepError("the latest One-Pager file is missing; run summarize again", True)
             one_pager = OnePager.from_dict(artifacts.read_json(latest_path))
+            # the names this One-Pager was written with, so the check matches it
             result = adapters.verifier.verify(
-                transcript, one_pager, meter, artifacts.verify_cache(data_dir, video_id))
+                speakers.apply(transcript, latest.get("speaker_names")), one_pager, meter,
+                artifacts.verify_cache(data_dir, video_id))
             version = latest["version"]
             # file first, row second, like the One-Pager; earlier versions' files stay as they are
             artifacts.write_json(

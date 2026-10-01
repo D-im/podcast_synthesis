@@ -110,6 +110,16 @@ MIGRATIONS: list[list[str]] = [
     [
         "ALTER TABLE jobs ADD COLUMN pause_reason TEXT",
     ],
+    # 12: speaker names per Episode, and the names each One-Pager version used (Story 4.1)
+    [
+        """CREATE TABLE speaker_names (
+            video_id TEXT NOT NULL REFERENCES episodes(video_id),
+            label TEXT NOT NULL,
+            name TEXT NOT NULL,
+            PRIMARY KEY (video_id, label)
+        )""",
+        "ALTER TABLE one_pager_versions ADD COLUMN speaker_names TEXT",
+    ],
 ]
 
 

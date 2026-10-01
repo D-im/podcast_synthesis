@@ -100,8 +100,10 @@ def change_summary(previous: dict | None, current: dict) -> str:
     cur, prev = current.get("prompt_hashes") or {}, previous.get("prompt_hashes") or {}
     model = (f"model changed: {previous.get('model')} to {current.get('model')}"
              if current.get("model") != previous.get("model") else "")
+    names_changed = (previous.get("speaker_names") or {}) != (current.get("speaker_names") or {})
+    names = "speaker names changed" if names_changed else ""
     if not cur or not prev:     # a missing record is not a change in the prompts
-        return "; ".join(p for p in ("no prompt record", model) if p)
+        return "; ".join(p for p in ("no prompt record", model, names) if p)
     changed = sorted(k for k in cur if k in prev and cur[k] != prev[k])
     added = sorted(k for k in cur if k not in prev)
     removed = sorted(k for k in prev if k not in cur)
@@ -114,6 +116,8 @@ def change_summary(previous: dict | None, current: dict) -> str:
         parts.append("removed: " + ", ".join(removed))
     if model:
         parts.append(model)
+    if names:
+        parts.append(names)
     return "; ".join(parts) or "no prompt change"
 
 

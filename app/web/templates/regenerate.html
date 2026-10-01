@@ -4,7 +4,8 @@
 <h1>Regenerate the One-Pager: {{ title }}</h1>
 {% if message %}<p role="alert">{{ message }}</p>
 {% endif %}{% if notice %}<p role="alert">{{ notice }}</p>
-{% endif %}{% if estimate %}<p>This reuses the stored audio and Transcript and runs only the summarize and verify steps. It creates the next One-Pager version; earlier versions stay.</p>
+{% endif %}{% if estimate %}{% if speaker_names %}<p>The saved speaker names will be used: {{ speaker_names | join(", ") }}.</p>
+{% endif %}<p>This reuses the stored audio and Transcript and runs only the summarize and verify steps. It creates the next One-Pager version; earlier versions stay.</p>
 <ul>
 <li>Summarize: <strong>{{ estimate.summarize }}</strong>{% if estimate.map_reduce %} (long transcript: map-reduce){% endif %}</li>
 <li>Verify: <strong>{{ estimate.verify }}</strong>{% if estimate.verify_free %} (the verifier is "{{ estimate.verifier }}", so this step costs nothing){% endif %}</li>

@@ -1,0 +1,10 @@
+{% if status.speakers %}<section id="speakers">
+<h2>Speakers</h2>
+<form method="post" action="/episodes/{{ episode.video_id }}/speakers">
+{% if status.speakers_error %}<p role="alert">{{ status.speakers_error }}</p>
+{% endif %}{% for sp in status.speakers.labels %}<p><label>Speaker {{ sp.label }} <input type="text" name="name_{{ sp.label }}" value="{{ sp.name }}" maxlength="60" size="30"></label></p>
+{% endfor %}<p><small>Names apply to the next summarize, verify or Regenerate. Earlier One-Pager versions keep their text. Leave a name empty to show the plain label.</small></p>
+<button type="submit">Save names</button>
+</form>
+</section>
+{% endif %}

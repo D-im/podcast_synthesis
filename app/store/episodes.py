@@ -163,24 +163,36 @@ def set_vendor_job_id(
 
 def latest_one_pager_version(conn: sqlite3.Connection, video_id: str) -> dict | None:
     row = conn.execute(
-        "SELECT version, created_at, model, prompt_hashes FROM one_pager_versions "
+        "SELECT version, created_at, model, prompt_hashes, speaker_names FROM one_pager_versions "
         "WHERE video_id = ? ORDER BY version DESC LIMIT 1",
         (video_id,),
     ).fetchone()
     if row is None:
         return None
     return {"version": row[0], "created_at": row[1], "model": row[2],
-            "prompt_hashes": json.loads(row[3])}
+            "prompt_hashes": json.loads(row[3]), "speaker_names": _names(row[4])}
+
+
+def _names(raw: str | None) -> dict[str, str] | None:
+    """Stored names JSON as a dict; None when nothing was recorded or it is unreadable."""
+    if raw is None:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def add_one_pager_version(
     conn: sqlite3.Connection, video_id: str, version: int, model: str,
-    prompt_hashes: dict[str, str],
+    prompt_hashes: dict[str, str], speaker_names: dict[str, str] | None = None,
 ) -> None:
     conn.execute(
-        "INSERT INTO one_pager_versions (video_id, version, created_at, model, prompt_hashes) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (video_id, version, _now(), model, json.dumps(prompt_hashes, sort_keys=True)),
+        "INSERT INTO one_pager_versions (video_id, version, created_at, model, prompt_hashes, "
+        "speaker_names) VALUES (?, ?, ?, ?, ?, ?)",
+        (video_id, version, _now(), model, json.dumps(prompt_hashes, sort_keys=True),
+         json.dumps(speaker_names, sort_keys=True) if speaker_names else None),
     )
 
 
@@ -307,12 +319,12 @@ def enqueue_regeneration(conn: sqlite3.Connection, video_id: str,
 def list_one_pager_versions(conn: sqlite3.Connection, video_id: str) -> list[dict]:
     """All versions, oldest first."""
     rows = conn.execute(
-        "SELECT version, created_at, model, prompt_hashes FROM one_pager_versions "
+        "SELECT version, created_at, model, prompt_hashes, speaker_names FROM one_pager_versions "
         "WHERE video_id = ? ORDER BY version",
         (video_id,),
     ).fetchall()
     out = []
-    for version, created, model, hashes in rows:
+    for version, created, model, hashes, names in rows:
         try:
             parsed = json.loads(hashes)
             if not isinstance(parsed, dict):
@@ -320,7 +332,7 @@ def list_one_pager_versions(conn: sqlite3.Connection, video_id: str) -> list[dic
         except (ValueError, TypeError):
             parsed = {}
         out.append({"version": version, "created_at": created, "model": model,
-                    "prompt_hashes": parsed})
+                    "prompt_hashes": parsed, "speaker_names": _names(names)})
     return out
 
 
@@ -422,3 +434,24 @@ def resume_paused_job(conn: sqlite3.Connection, video_id: str) -> str:
             conn.execute("ROLLBACK")
         raise
     return outcome
+
+
+def get_speaker_names(conn: sqlite3.Connection, video_id: str) -> dict[str, str]:
+    rows = conn.execute("SELECT label, name FROM speaker_names WHERE video_id = ?",
+                        (video_id,)).fetchall()
+    return {label: name for label, name in rows}
+
+
+def set_speaker_names(conn: sqlite3.Connection, video_id: str, mapping: dict[str, str]) -> None:
+    """Replace the Episode's names with `mapping` in one transaction."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("DELETE FROM speaker_names WHERE video_id = ?", (video_id,))
+        for label, name in mapping.items():
+            conn.execute("INSERT INTO speaker_names (video_id, label, name) VALUES (?, ?, ?)",
+                         (video_id, label, name))
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
