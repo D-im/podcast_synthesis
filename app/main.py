@@ -56,7 +56,8 @@ def run() -> None:
     try:
         app = create_app(
             warnings, db.DEFAULT_DATA_DIR, config.daily_cap_usd, DEFAULT_CONFIG_PATH,
-            Thresholds(config.accuracy_threshold, config.coverage_threshold))
+            Thresholds(config.accuracy_threshold, config.coverage_threshold),
+            lookup=getattr(adapters.downloader, "lookup", None))
         uvicorn.run(app, host=HOST, port=config.port)
     finally:
         worker.stop()

@@ -81,10 +81,12 @@ def estimate_for_episode(conn: sqlite3.Connection, data_dir: Path, video_id: str
     return estimate_regeneration(transcript_tokens, page_tokens, prices)
 
 
-def enqueue(conn: sqlite3.Connection, data_dir: Path, video_id: str) -> int:
+def enqueue(conn: sqlite3.Connection, data_dir: Path, video_id: str,
+            estimate_micro: int | None = None) -> int:
     """Queue the regeneration Job. Raises UnknownEpisode or Blocked; nothing is written then."""
     check_preconditions(conn, data_dir, video_id)
-    job_id = episodes.enqueue_regeneration(conn, video_id, STEP_NAMES, DONE_STEPS)
+    job_id = episodes.enqueue_regeneration(conn, video_id, STEP_NAMES, DONE_STEPS,
+                                           estimate_micro)
     if job_id is None:  # lost a race with another confirm
         check_preconditions(conn, data_dir, video_id)
         raise Blocked("This Episode already has a Job waiting or running.")

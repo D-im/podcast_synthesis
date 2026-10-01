@@ -85,6 +85,33 @@ class YtDlpDownloader:
         self.js_runtime = js_runtime
         self._factory = ydl_factory or _ydl_factory
 
+    def lookup(self, video_id: str, url: str) -> DownloadResult:
+        """Title and duration only, nothing downloaded. Free."""
+        opts = {
+            "noplaylist": True, "quiet": True, "no_warnings": True, "noprogress": True,
+            "ignoreconfig": True, "socket_timeout": 30, "retries": 1, "extractor_retries": 1,
+            "skip_download": True, "js_runtimes": {self.js_runtime: {}},
+        }
+        try:
+            with self._factory(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+        except StepError:
+            raise
+        except Exception as e:
+            if _is_yt_dlp_or_network_error(e):
+                raise classify_error(e) from None
+            raise
+        if not info:
+            raise StepError("no video information was returned", True)
+        if info.get("is_live") or info.get("live_status") in ("is_live", "is_upcoming"):
+            raise StepError("the video is a live stream or upcoming premiere", False)
+        duration = info.get("duration")
+        if (not isinstance(duration, (int, float)) or isinstance(duration, bool)
+                or not math.isfinite(duration) or duration <= 0):
+            raise StepError("no duration is known for this video", False)
+        title = " ".join(str(info.get("title") or "").split())[:TITLE_LIMIT] or video_id
+        return DownloadResult(title, int(round(duration)))
+
     def download(self, video_id: str, url: str, dest: Path, meter: Meter) -> DownloadResult:
         # A download is free: nothing is recorded through the meter.
         dest = Path(dest)

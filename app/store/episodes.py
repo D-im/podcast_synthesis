@@ -24,7 +24,9 @@ def get_episode(conn: sqlite3.Connection, video_id: str) -> dict | None:
 
 
 def create_episode_with_job(
-    conn: sqlite3.Connection, video_id: str, url: str, step_names: Sequence[str]
+    conn: sqlite3.Connection, video_id: str, url: str, step_names: Sequence[str],
+    title: str | None = None, duration_seconds: int | None = None,
+    estimate_micro: int | None = None,
 ) -> tuple[dict, bool]:
     """Create Episode + queued Job + pending steps atomically.
 
@@ -38,13 +40,14 @@ def create_episode_with_job(
             return existing, False
         now = _now()
         conn.execute(
-            "INSERT INTO episodes (video_id, url, created_at) VALUES (?, ?, ?)",
-            (video_id, url, now),
+            "INSERT INTO episodes (video_id, url, title, duration_seconds, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (video_id, url, title, duration_seconds, now),
         )
         job_id = conn.execute(
-            "INSERT INTO jobs (video_id, state, created_at, updated_at) "
-            "VALUES (?, 'queued', ?, ?)",
-            (video_id, now, now),
+            "INSERT INTO jobs (video_id, state, created_at, updated_at, estimate_micro) "
+            "VALUES (?, 'queued', ?, ?, ?)",
+            (video_id, now, now, estimate_micro),
         ).lastrowid
         for ordinal, name in enumerate(step_names, start=1):
             conn.execute(
@@ -65,7 +68,7 @@ def create_episode_with_job(
 
 def get_latest_job_with_steps(conn: sqlite3.Connection, video_id: str) -> dict | None:
     job = conn.execute(
-        "SELECT id, state, created_at, updated_at FROM jobs "
+        "SELECT id, state, created_at, updated_at, estimate_micro FROM jobs "
         "WHERE video_id = ? ORDER BY id DESC LIMIT 1",
         (video_id,),
     ).fetchone()
@@ -81,6 +84,7 @@ def get_latest_job_with_steps(conn: sqlite3.Connection, video_id: str) -> dict |
         "state": job[1],
         "created_at": job[2],
         "updated_at": job[3],
+        "estimate_micro": job[4],
         "steps": [
             {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r, "attempts": a}
             for n, o, s, m, r, a in steps
@@ -268,7 +272,8 @@ def has_active_job(conn: sqlite3.Connection, video_id: str) -> bool:
 
 
 def enqueue_regeneration(conn: sqlite3.Connection, video_id: str,
-                         step_names: Sequence[str], done_steps: Sequence[str]) -> int | None:
+                         step_names: Sequence[str], done_steps: Sequence[str],
+                         estimate_micro: int | None = None) -> int | None:
     """Queue a Job whose `done_steps` are stored `done` and the rest `pending`, atomically.
 
     Re-checks inside the transaction that no Job is active for the Episode; returns the new
@@ -281,9 +286,9 @@ def enqueue_regeneration(conn: sqlite3.Connection, video_id: str,
             return None
         now = _now()
         job_id = conn.execute(
-            "INSERT INTO jobs (video_id, state, created_at, updated_at) "
-            "VALUES (?, 'queued', ?, ?)",
-            (video_id, now, now),
+            "INSERT INTO jobs (video_id, state, created_at, updated_at, estimate_micro) "
+            "VALUES (?, 'queued', ?, ?, ?)",
+            (video_id, now, now, estimate_micro),
         ).lastrowid
         for ordinal, name in enumerate(step_names, start=1):
             conn.execute(

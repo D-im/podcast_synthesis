@@ -39,6 +39,9 @@ class FakeDownloader:
     def __init__(self, b: FakeBehavior):
         self.b = b
 
+    def lookup(self, video_id: str, url: str) -> DownloadResult:
+        return DownloadResult(title=f"Fake episode {video_id}", duration_seconds=3600)
+
     def download(self, video_id: str, url: str, dest: Path, meter: Meter) -> DownloadResult:
         self.b.enter("download")
         self.b.charge(meter)

@@ -60,6 +60,6 @@ development_status:
   epic-3: in-progress
   3-1-recover-after-sleep-or-restart: done
   3-2-retry-a-failed-job: review
-  3-3-refuse-a-submission-that-would-exceed-the-daily-cap: backlog
+  3-3-refuse-a-submission-that-would-exceed-the-daily-cap: review
   3-4-pause-a-job-that-hits-the-cap-mid-run-and-resume-it-on-reque: backlog
   epic-3-retrospective: optional

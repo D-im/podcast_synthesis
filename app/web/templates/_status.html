@@ -3,7 +3,8 @@
 <p>Status: <strong>{{ status.label }}</strong></p>
 <p>Submitted: {{ status.date }}</p>
 <p>Spend: <strong>{{ status.spend.total }}</strong></p>
-{% if status.message %}<p>Error: {{ status.message }}</p>
+{% if status.estimate %}<p>This run: estimate <strong>{{ status.estimate.estimate }}</strong>{% if status.estimate.actual %}, actual so far <strong>{{ status.estimate.actual }}</strong>{% endif %}. Compare them to check the prices in config.toml.</p>
+{% endif %}{% if status.message %}<p>Error: {{ status.message }}</p>
 {% endif %}{% if status.failed_step %}<p>Failed step: {{ status.failed_step }}. Attempts: {{ status.attempts }}</p>
 {% if status.retryable %}<form method="post" action="/episodes/{{ episode.video_id }}/retry"><button type="submit">Retry</button></form>
 {% else %}<p>This failure is permanent, so retrying would fail the same way. It usually needs a different link or a changed setting.</p>

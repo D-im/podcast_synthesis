@@ -102,6 +102,10 @@ MIGRATIONS: list[list[str]] = [
     [
         "ALTER TABLE steps ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0",
     ],
+    # 10: the estimate a Job was accepted with, in micro-dollars (Story 3.3)
+    [
+        "ALTER TABLE jobs ADD COLUMN estimate_micro INTEGER",
+    ],
 ]
 
 

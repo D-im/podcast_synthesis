@@ -13,7 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import ConfigError, DEFAULT_CONFIG_PATH, load_config
+from app.core import admission as core_admission
 from app.core import regenerate as core_regen
+from app.core.budget import check_budget
 from app.core import submit as core_submit
 from app.core import verdict as core_verdict
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
@@ -28,7 +30,9 @@ TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
                daily_cap_usd: float = 5.0, config_path: Path | None = None,
-               thresholds: Thresholds = Thresholds()) -> FastAPI:
+               thresholds: Thresholds = Thresholds(), lookup=None) -> FastAPI:
+    """`lookup(video_id, url)` gives a new submission its free title and duration lookup; when
+    given, every new submission is estimated and checked against the Daily Cap first."""
     app = FastAPI()
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")),
               name="static")
@@ -79,7 +83,12 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         def work():
             # own connection inside the worker thread: sqlite connections are thread-bound
             with closing(db.connect(data_dir)) as conn:
-                return core_submit.submit(conn, url)
+                admit = None
+                if lookup is not None:
+                    def admit(c, video_id, canonical):
+                        return core_admission.admit(c, video_id, canonical, lookup,
+                                                    config_path or DEFAULT_CONFIG_PATH)
+                return core_submit.submit(conn, url, admit)
 
         try:
             result = await run_in_threadpool(work)
@@ -89,7 +98,7 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
                 "Could not save that link just now (the database is busy or unavailable). "
                 "Nothing was created. Please try again.", url)
         if isinstance(result, core_submit.Rejected):
-            return home_response(request, 400, result.reason, url)
+            return home_response(request, result.status, result.reason, url)
         return RedirectResponse(f"/episodes/{result.video_id}", status_code=303)
 
     def load(video_id: str):
@@ -101,6 +110,12 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             verdict_rows = episodes.list_verdicts(conn, video_id) if episode else []
             can_regen = (core_regen.can_regenerate(conn, data_dir, video_id)
                          if episode else False)
+            job_actual = None
+            if job is not None and job.get("estimate_micro") is not None:
+                try:
+                    job_actual = spend.total_since(conn, video_id, job["created_at"])
+                except (ValueError, sqlite3.Error):
+                    job_actual = None
             if episode is not None:
                 cost = describe_spend(spend.total_for_episode(conn, video_id),
                                       spend.by_step(conn, video_id))
@@ -108,6 +123,11 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             raise HTTPException(status_code=404, detail="Episode not found")
         status = describe_job(episode, job, cost)
         status["date"] = local_datetime(episode["created_at"])
+        status["estimate"] = None
+        if job is not None and job.get("estimate_micro") is not None:
+            status["estimate"] = {"estimate": format_usd(job["estimate_micro"]),
+                                  "actual": None if job_actual is None
+                                  else format_usd(job_actual)}
         status["audio_ready"] = False
         try:
             status["audio_ready"] = artifacts.exists(
@@ -326,7 +346,8 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             "today": None if today is None else format_usd(today, 2),
             "cap": format_usd(cap, 2),
             "after": None if today is None else format_usd(today + est.total_micro, 2),
-            "over_cap": today is not None and today + est.total_micro > cap,
+            "over_cap": today is not None and not check_budget(today, est.total_micro,
+                                                                cap).allowed,
             "map_reduce": est.assumptions["summarize"]["mode"] == "map-reduce",
         }
         response = TEMPLATES.TemplateResponse(request, "regenerate.html", ctx,
@@ -354,7 +375,11 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
                 est = core_regen.estimate_for_episode(conn, data_dir, video_id, config)
                 if not re.fullmatch(r"[0-9]{1,18}", posted) or int(posted) != est.total_micro:
                     return "stale"
-                core_regen.enqueue(conn, data_dir, video_id)
+                cap = to_micro(config.daily_cap_usd)
+                decision = check_budget(core_admission.today_micro(conn), est.total_micro, cap)
+                if not decision.allowed:
+                    return "over_cap:" + decision.reason
+                core_regen.enqueue(conn, data_dir, video_id, est.total_micro)
                 return "queued"
 
         try:
@@ -374,6 +399,10 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
                  "today_spend": today_spend()}, status_code=503)
         if outcome == "queued":
             return RedirectResponse(f"/episodes/{video_id}", status_code=303)
+        if outcome.startswith("over_cap:"):
+            return await run_in_threadpool(
+                regenerate_page, request, video_id, 409,
+                f"Refused: {outcome[len('over_cap:'):]}. Nothing was started.")
         if outcome == "stale":
             return await run_in_threadpool(
                 regenerate_page, request, video_id, 200,

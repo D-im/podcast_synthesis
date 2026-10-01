@@ -55,3 +55,13 @@ def total_between(conn: sqlite3.Connection, start_utc: datetime, end_utc: dateti
         "WHERE created_at >= ? AND created_at < ?",
         (utc_stamp(start_utc), utc_stamp(end_utc)),
     ).fetchone()[0]
+
+
+def total_since(conn: sqlite3.Connection, video_id: str, since_iso: str) -> int:
+    """An Episode's spend recorded at or after `since_iso` (any ISO-8601 timestamp)."""
+    since = datetime.fromisoformat(since_iso)
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+    return conn.execute(
+        "SELECT COALESCE(SUM(amount_micro_usd), 0) FROM spend_ledger "
+        "WHERE video_id = ? AND created_at >= ?", (video_id, utc_stamp(since))).fetchone()[0]

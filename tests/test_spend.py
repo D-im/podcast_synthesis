@@ -154,7 +154,7 @@ def test_upgrade_from_populated_v2(tmp_path):
     conn.close()
     db.bootstrap(tmp_path)
     with closing(db.connect(tmp_path)) as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 10
         assert c.execute("select count(*) from episodes").fetchone()[0] == 1
         assert c.execute("select count(*) from sqlite_master where type='trigger'"
                          " and tbl_name='spend_ledger'").fetchone()[0] == 2

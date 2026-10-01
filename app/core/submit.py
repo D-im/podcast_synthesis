@@ -24,17 +24,30 @@ class Submitted:
 @dataclass(frozen=True)
 class Rejected:
     reason: str
+    status: int = 400
 
 
 def canonical_url(video_id: str) -> str:
     return f"https://www.youtube.com/watch?v={video_id}"
 
 
-def submit(conn: sqlite3.Connection, url: str) -> Submitted | Rejected:
+def submit(conn: sqlite3.Connection, url: str, admit=None) -> Submitted | Rejected:
+    """Create or find the Episode. With `admit(conn, video_id, url)`, a new Episode is created
+    only when it returns an Admitted; a Rejected is passed back and nothing is written."""
     video_id = parse_video_id(url)
     if video_id is None:
         return Rejected(INVALID_URL_MESSAGE)
+    title = duration = estimate = None
+    if admit is not None:
+        existing = episodes.get_episode(conn, video_id)
+        if existing is not None:
+            return Submitted(existing["video_id"], False)
+        admitted = admit(conn, video_id, canonical_url(video_id))
+        if isinstance(admitted, Rejected):
+            return admitted
+        title, duration, estimate = (admitted.title, admitted.duration_seconds,
+                                     admitted.estimate_micro)
     episode, created = episodes.create_episode_with_job(
-        conn, video_id, canonical_url(video_id), STEP_NAMES
+        conn, video_id, canonical_url(video_id), STEP_NAMES, title, duration, estimate
     )
     return Submitted(episode["video_id"], created)

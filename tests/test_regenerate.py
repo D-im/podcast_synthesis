@@ -452,7 +452,7 @@ def test_confirmation_page_warns_when_over_the_daily_cap(data, real_cfg):
     done_episode(data)
     real_cfg.write_text(real_cfg.read_text().replace("daily_cap_usd = 5.0", "daily_cap_usd = 0.01"))
     html = client(data, real_cfg).get(f"/episodes/{VID}/regenerate").text
-    assert 'id="over-cap"' in html and "not enforced yet" in html
+    assert 'id="over-cap"' in html and "will be refused" in html
     real_cfg.write_text(real_cfg.read_text().replace("daily_cap_usd = 0.01", "daily_cap_usd = 50.0"))
     assert 'id="over-cap"' not in client(data, real_cfg).get(f"/episodes/{VID}/regenerate").text
 

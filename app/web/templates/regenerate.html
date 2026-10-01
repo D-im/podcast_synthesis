@@ -12,8 +12,8 @@
 </ul>
 {% if estimate.today %}<p id="estimate-today">Today: {{ estimate.today }} of {{ estimate.cap }}; after this about {{ estimate.after }}</p>
 {% else %}<p id="estimate-today">Today's spend is unavailable (cap {{ estimate.cap }}).</p>
-{% endif %}{% if estimate.over_cap %}<p id="over-cap" role="note"><strong>This would take today's spend over the daily cap of {{ estimate.cap }}.</strong> The cap is not enforced yet, so you can still confirm.</p>
-{% endif %}<p><small>Every figure is an estimate. The real cost is shown afterwards on the Episode. Unchanged verify passes are reused and may make it lower. The daily cap is shown for information only.</small></p>
+{% endif %}{% if estimate.over_cap %}<p id="over-cap" role="note"><strong>This would take today's spend over the daily cap of {{ estimate.cap }}.</strong> Confirming will be refused.</p>
+{% endif %}<p><small>Every figure is an estimate. The real cost is shown afterwards on the Episode. Unchanged verify passes are reused and may make it lower.</small></p>
 <form method="post" action="/episodes/{{ video_id }}/regenerate">
 <input type="hidden" name="estimate" value="{{ estimate.micro }}">
 <button type="submit">Confirm and queue regeneration</button>
