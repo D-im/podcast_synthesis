@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -11,6 +12,8 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.config import ConfigError, DEFAULT_CONFIG_PATH, load_config
+from app.core import regenerate as core_regen
 from app.core import submit as core_submit
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
 from app.ports import OnePager, Transcript
@@ -93,6 +96,9 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             episode = episodes.get_episode(conn, video_id)
             job = episodes.get_latest_job_with_steps(conn, video_id) if episode else None
             latest = episodes.latest_one_pager_version(conn, video_id) if episode else None
+            versions = episodes.list_one_pager_versions(conn, video_id) if episode else []
+            can_regen = (core_regen.can_regenerate(conn, data_dir, video_id)
+                         if episode else False)
             if episode is not None:
                 cost = describe_spend(spend.total_for_episode(conn, video_id),
                                       spend.by_step(conn, video_id))
@@ -115,7 +121,13 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         status["one_pager_error"] = None
         summarized = any(s["name"] == "summarize" and s["state"] == "done"
                          for s in (job or {}).get("steps", []))
-        if summarized and latest is not None:
+        status["can_regenerate"] = can_regen
+        status["history"] = core_regen.history(versions)
+        for row in status["history"]:
+            row["date"] = local_datetime(row["created_at"])
+        # the latest successful version stays shown even while a regeneration is queued,
+        # running or failed
+        if latest is not None:
             try:
                 page = OnePager.from_dict(artifacts.read_json(
                     artifacts.one_pager_path(data_dir, video_id, latest["version"])))
@@ -176,6 +188,142 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         return TEMPLATES.TemplateResponse(
             request, "episode.html",
             {"episode": episode, "status": status, "today_spend": today_spend()},
+        )
+
+    def regenerate_page(request: Request, video_id: str, status_code: int = 200,
+                        notice: str | None = None):
+        """The confirmation page. Read-only: it never queues anything."""
+        ctx = {"video_id": video_id, "title": video_id, "message": None, "notice": notice,
+               "estimate": None, "today_spend": today_spend()}
+        try:
+            with closing(db.connect(data_dir)) as conn:
+                episode = episodes.get_episode(conn, video_id)
+                if episode is None:
+                    raise HTTPException(status_code=404, detail="Episode not found")
+                ctx["title"] = episode.get("title") or video_id
+                try:
+                    core_regen.check_preconditions(conn, data_dir, video_id)
+                except core_regen.Blocked as e:
+                    ctx["message"] = e.message
+                    return TEMPLATES.TemplateResponse(request, "regenerate.html", ctx,
+                                                      status_code=409)
+                try:
+                    config = load_config(config_path or DEFAULT_CONFIG_PATH)
+                    core_regen.Prices.from_config(config)   # fails early on unusable prices
+                except (ConfigError, KeyError, TypeError, ValueError, OSError):
+                    ctx["message"] = ("The config file could not be read, so no estimate can "
+                                      "be made. Nothing was started.")
+                    return TEMPLATES.TemplateResponse(request, "regenerate.html", ctx,
+                                                      status_code=status_code)
+                try:
+                    est = core_regen.estimate_for_episode(conn, data_dir, video_id, config)
+                except core_regen.Blocked as e:
+                    ctx["message"] = e.message
+                    return TEMPLATES.TemplateResponse(request, "regenerate.html", ctx,
+                                                      status_code=409)
+                try:
+                    start, end = local_day_bounds_utc()
+                    today = spend.total_between(conn, start, end)
+                except (sqlite3.Error, OSError, RuntimeError):
+                    today = None
+        except (sqlite3.Error, OSError):
+            ctx["message"] = "The database is unavailable just now. Nothing was started."
+            return TEMPLATES.TemplateResponse(request, "regenerate.html", ctx,
+                                              status_code=503)
+        cap = to_micro(config.daily_cap_usd)
+        ctx["estimate"] = {
+            "summarize": format_usd(est.summarize_micro), "verify": format_usd(est.verify_micro),
+            "total": format_usd(est.total_micro), "micro": est.total_micro,
+            "verify_free": est.verify_micro == 0,
+            "verifier": config.providers["verifier"],
+            "today": None if today is None else format_usd(today, 2),
+            "cap": format_usd(cap, 2),
+            "after": None if today is None else format_usd(today + est.total_micro, 2),
+            "over_cap": today is not None and today + est.total_micro > cap,
+            "map_reduce": est.assumptions["summarize"]["mode"] == "map-reduce",
+        }
+        response = TEMPLATES.TemplateResponse(request, "regenerate.html", ctx,
+                                              status_code=status_code)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.get("/episodes/{video_id}/regenerate", response_class=HTMLResponse)
+    def regenerate_get(request: Request, video_id: str):
+        return regenerate_page(request, video_id)
+
+    @app.post("/episodes/{video_id}/regenerate")
+    async def regenerate_post(request: Request, video_id: str):
+        body = (await request.body()).decode("utf-8", errors="replace")
+        posted = (parse_qs(body).get("estimate") or [""])[0].strip()
+
+        def work():
+            with closing(db.connect(data_dir)) as conn:
+                core_regen.check_preconditions(conn, data_dir, video_id)
+                try:
+                    config = load_config(config_path or DEFAULT_CONFIG_PATH)
+                    core_regen.Prices.from_config(config)
+                except (ConfigError, KeyError, TypeError, ValueError, OSError):
+                    return "config"
+                est = core_regen.estimate_for_episode(conn, data_dir, video_id, config)
+                if not re.fullmatch(r"[0-9]{1,18}", posted) or int(posted) != est.total_micro:
+                    return "stale"
+                core_regen.enqueue(conn, data_dir, video_id)
+                return "queued"
+
+        try:
+            outcome = await run_in_threadpool(work)
+        except core_regen.UnknownEpisode:
+            raise HTTPException(status_code=404, detail="Episode not found") from None
+        except core_regen.Blocked as e:
+            return TEMPLATES.TemplateResponse(
+                request, "regenerate.html",
+                {"video_id": video_id, "title": video_id, "message": e.message, "notice": None,
+                 "estimate": None, "today_spend": today_spend()}, status_code=409)
+        except (sqlite3.Error, OSError):
+            return TEMPLATES.TemplateResponse(
+                request, "regenerate.html",
+                {"video_id": video_id, "title": video_id, "notice": None, "estimate": None,
+                 "message": "The database is unavailable just now. Nothing was started.",
+                 "today_spend": today_spend()}, status_code=503)
+        if outcome == "queued":
+            return RedirectResponse(f"/episodes/{video_id}", status_code=303)
+        if outcome == "stale":
+            return await run_in_threadpool(
+                regenerate_page, request, video_id, 200,
+                "The estimate changed since you last looked (the transcript, the One-Pager or "
+                "the prices changed). Nothing was started. Please check the new figures.")
+        return await run_in_threadpool(regenerate_page, request, video_id)
+
+    @app.get("/episodes/{video_id}/versions/{number}", response_class=HTMLResponse)
+    def version_page(request: Request, video_id: str, number: str):
+        if not re.fullmatch(r"[1-9][0-9]{0,8}", number):
+            raise HTTPException(status_code=404, detail="Version not found")
+        n = int(number)
+        try:
+            with closing(db.connect(data_dir)) as conn:
+                if episodes.get_episode(conn, video_id) is None:
+                    raise HTTPException(status_code=404, detail="Episode not found")
+                versions = episodes.list_one_pager_versions(conn, video_id)
+        except (sqlite3.Error, OSError):
+            raise HTTPException(status_code=503, detail="The database is unavailable just now") \
+                from None
+        row = next((v for v in versions if v["version"] == n), None)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Version not found")
+        sections, error = [], None
+        try:
+            page = OnePager.from_dict(artifacts.read_json(
+                artifacts.one_pager_path(data_dir, video_id, n)))
+            sections = [{"name": x.name, "text": x.text} for x in page.sections]
+        except (ValueError, OSError, KeyError, TypeError, RecursionError):
+            error = f"One-Pager v{n} could not be read."
+        verification = read_verification(video_id, n)
+        return TEMPLATES.TemplateResponse(
+            request, "version.html",
+            {"video_id": video_id, "version": n, "row": row,
+             "date": local_datetime(row["created_at"]), "is_latest": n == versions[-1]["version"],
+             "sections": sections, "error": error, "verification": verification,
+             "today_spend": today_spend()},
         )
 
     @app.get("/episodes/{video_id}/status", response_class=HTMLResponse)

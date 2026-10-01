@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Regenerate {{ video_id }}{% endblock %}
+{% block content %}<p><a href="/episodes/{{ video_id }}">Back to episode</a></p>
+<h1>Regenerate the One-Pager: {{ title }}</h1>
+{% if message %}<p role="alert">{{ message }}</p>
+{% endif %}{% if notice %}<p role="alert">{{ notice }}</p>
+{% endif %}{% if estimate %}<p>This reuses the stored audio and Transcript and runs only the summarize and verify steps. It creates the next One-Pager version; earlier versions stay.</p>
+<ul>
+<li>Summarize: <strong>{{ estimate.summarize }}</strong>{% if estimate.map_reduce %} (long transcript: map-reduce){% endif %}</li>
+<li>Verify: <strong>{{ estimate.verify }}</strong>{% if estimate.verify_free %} (the verifier is "{{ estimate.verifier }}", so this step costs nothing){% endif %}</li>
+<li>Total: <strong id="estimate-total">{{ estimate.total }}</strong></li>
+</ul>
+{% if estimate.today %}<p id="estimate-today">Today: {{ estimate.today }} of {{ estimate.cap }}; after this about {{ estimate.after }}</p>
+{% else %}<p id="estimate-today">Today's spend is unavailable (cap {{ estimate.cap }}).</p>
+{% endif %}{% if estimate.over_cap %}<p id="over-cap" role="note"><strong>This would take today's spend over the daily cap of {{ estimate.cap }}.</strong> The cap is not enforced yet, so you can still confirm.</p>
+{% endif %}<p><small>Every figure is an estimate. The real cost is shown afterwards on the Episode. Unchanged verify passes are reused and may make it lower. The daily cap is shown for information only.</small></p>
+<form method="post" action="/episodes/{{ video_id }}/regenerate">
+<input type="hidden" name="estimate" value="{{ estimate.micro }}">
+<button type="submit">Confirm and queue regeneration</button>
+</form>
+{% endif %}{% endblock %}

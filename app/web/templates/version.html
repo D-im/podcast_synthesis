@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Version {{ version }} of {{ video_id }}{% endblock %}
+{% block content %}<p><a href="/episodes/{{ video_id }}">Back to episode</a></p>
+<h1>One-Pager v{{ version }}</h1>
+<p>Created {{ date }}; model {{ row.model }}</p>
+{% if not is_latest %}<p role="note">This is an earlier version, not the latest.</p>
+{% endif %}{% if error %}<p role="alert">{{ error }}</p>
+{% endif %}{% for sec in sections %}<h3>{{ sec.name }}</h3>
+<div class="one-pager-text" style="white-space: pre-wrap">{{ sec.text }}</div>
+{% endfor %}{% if verification %}<section id="verification">
+<h2>Automated check (One-Pager v{{ verification.version }})</h2>
+<p>Accuracy: <strong>{{ verification.accuracy }}</strong> of {{ verification.checked }} claims checked</p>
+{% if verification.coverage %}<p>Coverage: <strong>{{ verification.coverage }}</strong></p>
+{% endif %}<p><small>This is an automated check by a second model and can be wrong.</small></p>
+{% if verification.unsupported %}<h3>Unsupported claims</h3>
+<ul>
+{% for u in verification.unsupported %}<li>[{{ u.section }}] {{ u.claim }}{% if u.note %} - {{ u.note }}{% endif %}</li>
+{% endfor %}</ul>
+{% else %}<p>No unsupported claims found.</p>
+{% endif %}{% if verification.missed %}<h3>Missed ideas</h3>
+<ul>
+{% for m in verification.missed %}<li>{{ m.title }} ({{ m.coverage }}){% if m.note %} - {{ m.note }}{% endif %}</li>
+{% endfor %}</ul>
+{% endif %}</section>
+{% endif %}{% endblock %}

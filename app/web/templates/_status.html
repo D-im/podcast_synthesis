@@ -6,6 +6,7 @@
 {% endif %}<p>Spend: <strong>{{ status.spend.total }}</strong></p>
 {% if status.message %}<p>Error: {{ status.message }}</p>
 {% endif %}{% if status.transcript_ready %}<p><a href="/episodes/{{ episode.video_id }}/transcript">Transcript</a></p>
+{% endif %}{% if status.can_regenerate %}<p><a href="/episodes/{{ episode.video_id }}/regenerate">Regenerate</a></p>
 {% endif %}{% if status.audio_ready %}<p><audio controls preload="none" src="/episodes/{{ episode.video_id }}/audio"></audio> <a href="/episodes/{{ episode.video_id }}/audio" download>Download audio</a></p>
 {% endif %}{% if status.steps %}<ol>
 {% for s in status.steps %}<li>{{ s.name }}: {{ s.state }}{% if s.message %} ({{ s.message }}){% endif %}{% if s.spend %} - {{ s.spend }}{% endif %}</li>
@@ -35,5 +36,11 @@
 {% elif status.verification_skipped %}<section id="verification">
 <h2>Accuracy check</h2>
 <p>Skipped: {{ status.verification_skipped }}</p>
+</section>
+{% endif %}{% if status.history %}<section id="versions">
+<h2>Versions</h2>
+<ul>
+{% for h in status.history %}<li><a href="/episodes/{{ episode.video_id }}/versions/{{ h.version }}">v{{ h.version }}</a>{% if loop.first %} (latest){% endif %} - {{ h.date }} - {{ h.model }} - {{ h.summary }}</li>
+{% endfor %}</ul>
 </section>
 {% endif %}</div>

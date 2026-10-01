@@ -251,3 +251,64 @@ def list_episodes(conn: sqlite3.Connection, limit: int | None = None) -> list[di
             job_by_id[jid]["steps"].append(
                 {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r})
     return items
+
+
+ACTIVE_JOB_STATES = ("queued", "running", "paused")
+
+
+def has_active_job(conn: sqlite3.Connection, video_id: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM jobs WHERE video_id = ? AND state IN (?, ?, ?) LIMIT 1",
+        (video_id, *ACTIVE_JOB_STATES),
+    ).fetchone() is not None
+
+
+def enqueue_regeneration(conn: sqlite3.Connection, video_id: str,
+                         step_names: Sequence[str], done_steps: Sequence[str]) -> int | None:
+    """Queue a Job whose `done_steps` are stored `done` and the rest `pending`, atomically.
+
+    Re-checks inside the transaction that no Job is active for the Episode; returns the new
+    Job id, or None (nothing written) if one is active or the Episode does not exist.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if get_episode(conn, video_id) is None or has_active_job(conn, video_id):
+            conn.execute("ROLLBACK")
+            return None
+        now = _now()
+        job_id = conn.execute(
+            "INSERT INTO jobs (video_id, state, created_at, updated_at) "
+            "VALUES (?, 'queued', ?, ?)",
+            (video_id, now, now),
+        ).lastrowid
+        for ordinal, name in enumerate(step_names, start=1):
+            conn.execute(
+                "INSERT INTO steps (job_id, name, ordinal, state) VALUES (?, ?, ?, ?)",
+                (job_id, name, ordinal, "done" if name in done_steps else "pending"),
+            )
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    return job_id
+
+
+def list_one_pager_versions(conn: sqlite3.Connection, video_id: str) -> list[dict]:
+    """All versions, oldest first."""
+    rows = conn.execute(
+        "SELECT version, created_at, model, prompt_hashes FROM one_pager_versions "
+        "WHERE video_id = ? ORDER BY version",
+        (video_id,),
+    ).fetchall()
+    out = []
+    for version, created, model, hashes in rows:
+        try:
+            parsed = json.loads(hashes)
+            if not isinstance(parsed, dict):
+                parsed = {}
+        except (ValueError, TypeError):
+            parsed = {}
+        out.append({"version": version, "created_at": created, "model": model,
+                    "prompt_hashes": parsed})
+    return out
