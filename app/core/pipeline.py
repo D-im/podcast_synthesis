@@ -108,14 +108,16 @@ def run_job(
             if not artifacts.exists(latest_path):
                 raise StepError("the latest One-Pager file is missing; run summarize again", True)
             one_pager = OnePager.from_dict(artifacts.read_json(latest_path))
-            result = adapters.verifier.verify(transcript, one_pager, meter)
+            result = adapters.verifier.verify(
+                transcript, one_pager, meter, artifacts.verify_cache(data_dir, video_id))
             version = latest["version"]
             # file first, row second, like the One-Pager; earlier versions' files stay as they are
             artifacts.write_json(
                 artifacts.verification_path(data_dir, video_id, version),
                 {"one_pager_version": version, **result.to_dict()})
             episodes.add_fidelity_score(
-                conn, video_id, version, result.model, result.prompt_hashes, result.accuracy)
+                conn, video_id, version, result.model, result.prompt_hashes, result.accuracy,
+                result.coverage)
         else:
             raise RuntimeError(f"unknown step {name}")
 

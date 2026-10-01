@@ -287,6 +287,30 @@ def test_run_passes_configured_daily_cap_to_the_header(monkeypatch, tmp_path):
     assert workers[0]._thread is None
 
 
+def test_run_wires_thresholds_and_config_path_into_the_flags(monkeypatch, tmp_path):
+    from contextlib import closing
+    from fastapi.testclient import TestClient as TC
+    from app.adapters.fakes import build_fakes
+    from app.core import submit as core_submit
+    from app.store import episodes
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(FAKE.read_text().replace("accuracy_threshold = 0.9", "accuracy_threshold = 0.2"))
+    captured = {}
+    _run_wiring(monkeypatch, tmp_path, config_path=cfg,
+                serve=lambda app, **kw: captured.update(app=app))
+    monkeypatch.setattr(main, "DEFAULT_CONFIG_PATH", cfg)
+    main.run()
+    with closing(db.connect(tmp_path)) as c:
+        core_submit.submit(c, "https://youtu.be/dQw4w9WgXcQ")
+        row = c.execute("select id from jobs").fetchone()[0]
+        episodes.add_one_pager_version(c, "dQw4w9WgXcQ", 1, "m", {})
+        episodes.add_fidelity_score(c, "dQw4w9WgXcQ", 1, "m", {}, 0.5, 0.9)
+    client = TC(captured["app"])
+    assert "Low accuracy" not in client.get("/").text          # 0.5 is above the 0.2 from config
+    cfg.write_text(cfg.read_text().replace("accuracy_threshold = 0.2", "accuracy_threshold = 0.8"))
+    assert "Low accuracy" in client.get("/").text              # live edit through the wired path
+
+
 def test_home_page_all_clear(tmp_path):
     db.bootstrap(tmp_path)
     html = TestClient(create_app([], tmp_path)).get("/").text

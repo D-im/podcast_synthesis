@@ -106,11 +106,35 @@ class UnsupportedClaim:
 
 
 @dataclass(frozen=True)
+class IdeaCheck:
+    """One main idea of the Transcript and whether the One-Pager conveys it."""
+    title: str
+    description: str
+    coverage: str         # "covered", "partial" or "missing"
+    where: str
+    note: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class MissedIdea:
+    title: str
+    coverage: str         # "partial" or "missing"
+    note: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class VerificationResult:
     accuracy: float
-    coverage: float | None = None   # None until the coverage check exists (Story 2.2)
+    coverage: float | None = None   # None when no coverage check ran
     unsupported_claims: tuple[UnsupportedClaim, ...] = ()
-    missed_ideas: tuple[str, ...] = ()
+    missed_ideas: tuple[MissedIdea, ...] = ()
+    ideas: tuple[IdeaCheck, ...] = ()
     claims: tuple[Claim, ...] = ()
     model: str = ""
     prompt_hashes: dict[str, str] = field(default_factory=dict)  # prompt name -> SHA-256
@@ -122,7 +146,9 @@ class VerificationResult:
             "claims": [c.to_dict() for c in self.claims],
             "unsupported_claims": [
                 u.to_dict() if hasattr(u, "to_dict") else u for u in self.unsupported_claims],
-            "missed_ideas": list(self.missed_ideas),
+            "ideas": [i.to_dict() for i in self.ideas],
+            "missed_ideas": [m.to_dict() if hasattr(m, "to_dict") else m
+                             for m in self.missed_ideas],
             "model": self.model,
             "prompt_hashes": dict(self.prompt_hashes),
         }
@@ -159,7 +185,7 @@ class Transcriber(Protocol):
 
 
 class NotesCache(Protocol):
-    """Finished map-step notes, so a retry never pays for them twice."""
+    """Finished map-step notes or verifier passes, so a retry never pays for them twice."""
 
     def get(self, key: str) -> str | None: ...
 
@@ -172,7 +198,8 @@ class Summarizer(Protocol):
 
 class Verifier(Protocol):
     def verify(
-        self, transcript: Transcript, one_pager: OnePager, meter: Meter
+        self, transcript: Transcript, one_pager: OnePager, meter: Meter,
+        cache: NotesCache | None = None,
     ) -> VerificationResult: ...
 
 

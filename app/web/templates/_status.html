@@ -17,14 +17,20 @@
 <div class="one-pager-text" style="white-space: pre-wrap">{{ sec.text }}</div>
 {% endfor %}</section>
 {% endif %}{% if status.verification %}<section id="verification">
-<h2>Accuracy check (One-Pager v{{ status.verification.version }})</h2>
+<h2>Automated check (One-Pager v{{ status.verification.version }})</h2>
 <p>Accuracy: <strong>{{ status.verification.accuracy }}</strong> of {{ status.verification.checked }} claims checked</p>
-<p><small>This is an automated check by a second model and can be wrong.</small></p>
+{% if status.verification.coverage %}<p>Coverage: <strong>{{ status.verification.coverage }}</strong> of the main ideas the checker found in the transcript (partly covered counts half)</p>
+{% endif %}{% for f in status.flags %}<p class="flag" role="note"><strong>&#9873; {{ f }}</strong> - advisory only</p>
+{% endfor %}<p><small>This is an automated check by a second model and can be wrong.</small></p>
 {% if status.verification.unsupported %}<h3>Unsupported claims</h3>
 <ul>
 {% for u in status.verification.unsupported %}<li>[{{ u.section }}] {{ u.claim }}{% if u.note %} - {{ u.note }}{% endif %}</li>
 {% endfor %}</ul>
 {% else %}<p>No unsupported claims found.</p>
+{% endif %}{% if status.verification.missed %}<h3>Missed ideas</h3>
+<ul>
+{% for m in status.verification.missed %}<li>{{ m.title }} ({{ m.coverage }}){% if m.note %} - {{ m.note }}{% endif %}</li>
+{% endfor %}</ul>
 {% endif %}</section>
 {% elif status.verification_skipped %}<section id="verification">
 <h2>Accuracy check</h2>

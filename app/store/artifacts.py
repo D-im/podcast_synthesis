@@ -136,3 +136,11 @@ class FileNotesCache:
 
 def notes_cache(data_dir: Path, video_id: str) -> FileNotesCache:
     return FileNotesCache(episode_dir(data_dir, video_id) / NOTES_DIR)
+
+
+VERIFY_DIR = "verify-cache"
+
+
+def verify_cache(data_dir: Path, video_id: str) -> FileNotesCache:
+    """Per-episode cache of finished verifier passes (JSON text, same key rules)."""
+    return FileNotesCache(episode_dir(data_dir, video_id) / VERIFY_DIR)

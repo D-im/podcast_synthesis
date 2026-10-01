@@ -20,3 +20,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-first-supervised-real-run.md`
   summary: Consider a prompt change so long episodes get a per-section length allowance and fewer dropped sub-topics (the first real One-Pager omitted Argentina, the deficit argument and the youth-vote figures).
   evidence: 28-claim check in `real-run-1-11.md` found no invented claims but several missed topics; the Epic 2 coverage check will measure this.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-check-coverage-and-flag-low-scores.md`
+  summary: Calibrate coverage: decide how strict "partial" should be, whether the ideas pass should list more than 15 ideas, and what threshold makes a flag useful.
+  evidence: First real check gave coverage 0.60 (3 covered, 12 partial, 0 missing) for a faithful one-page summary of a 65 minute interview, so the 0.75 default flags nearly everything; Argentina and the youth-vote figures were never listed as ideas. Revisit once Verdicts (Story 2.5) show what the scores mean in practice.

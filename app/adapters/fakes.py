@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.ports import (
     Adapters, DownloadResult, Meter, NotesCache, OnePager, Resume, Section, Segment, StepError, Transcript,
-    VerificationResult,
+    VerificationResult, IdeaCheck,
 )
 
 
@@ -86,11 +86,15 @@ class FakeVerifier:
         self.b = b
 
     def verify(self, transcript: Transcript, one_pager: OnePager,
-               meter: Meter) -> VerificationResult:
+               meter: Meter, cache: NotesCache | None = None) -> VerificationResult:
         self.b.enter("verify")
         self.b.charge(meter)
         self.b.maybe_fail("verify")
-        return VerificationResult(1.0, None, (), (), (), model="fake")
+        return VerificationResult(
+            1.0, 1.0, (), (),
+            (IdeaCheck("Deterministic testing", "Tests should be repeatable.", "covered",
+                       "Key ideas", ""),),
+            model="fake")
 
 
 def build_fakes(behavior: FakeBehavior | None = None, verifier: bool = True) -> Adapters:

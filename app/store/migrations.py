@@ -81,6 +81,10 @@ MIGRATIONS: list[list[str]] = [
             PRIMARY KEY (video_id, version)
         )""",
     ],
+    # 7: advisory coverage score beside accuracy (Story 2.2); old rows keep NULL
+    [
+        "ALTER TABLE fidelity_scores ADD COLUMN coverage REAL",
+    ],
 ]
 
 

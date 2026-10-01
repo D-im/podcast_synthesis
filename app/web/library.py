@@ -38,7 +38,8 @@ def percent(accuracy) -> str | None:
     return f"{shown:g}%"
 
 
-def _row(item: dict, snippet: str | None = None) -> dict:
+def _row(item: dict, snippet: str | None = None, thresholds=None) -> dict:
+    from app.web.flags import Thresholds, flags
     status = describe_job(item, item.get("job"))
     return {
         "video_id": item["video_id"],
@@ -47,6 +48,9 @@ def _row(item: dict, snippet: str | None = None) -> dict:
         "status": status["label"],
         "verdict": None,   # filled by Epic 2
         "fidelity": percent(item.get("fidelity_accuracy")),
+        "coverage": percent(item.get("fidelity_coverage")),
+        "flags": flags(item.get("fidelity_accuracy"), item.get("fidelity_coverage"),
+                       thresholds or Thresholds()),
         "snippet": snippet,
     }
 
@@ -76,12 +80,13 @@ def _snippet(text: str, patterns: list[re.Pattern]) -> str | None:
     return ("..." if start > 0 else "") + piece + ("..." if end < len(text) else "")
 
 
-def build_library(conn: sqlite3.Connection, data_dir: Path, raw_query: str | None) -> dict:
+def build_library(conn: sqlite3.Connection, data_dir: Path, raw_query: str | None,
+                  thresholds=None) -> dict:
     """Return {query, rows, truncated}. Blank query gives the latest 100; else search all."""
     query = parse_query(raw_query)
     if not query:
         items = episodes.list_episodes(conn, DEFAULT_LIMIT)
-        return {"query": "", "rows": [_row(i) for i in items], "truncated": False}
+        return {"query": "", "rows": [_row(i, thresholds=thresholds) for i in items], "truncated": False}
     patterns = [re.compile(re.escape(w), re.IGNORECASE) for w in query.split()]
     rows: list[dict] = []
     truncated = False
@@ -104,5 +109,5 @@ def build_library(conn: sqlite3.Connection, data_dir: Path, raw_query: str | Non
             break
         if text is None:
             text = _one_pager_text(data_dir, item)
-        rows.append(_row(item, _snippet(text, patterns) if text else None))
+        rows.append(_row(item, _snippet(text, patterns) if text else None, thresholds))
     return {"query": query, "rows": rows, "truncated": truncated}

@@ -180,39 +180,43 @@ def add_one_pager_version(
 
 def add_fidelity_score(
     conn: sqlite3.Connection, video_id: str, version: int, model: str,
-    prompt_hashes: dict[str, str], accuracy: float,
+    prompt_hashes: dict[str, str], accuracy: float, coverage: float | None = None,
 ) -> None:
     """Store the score for one One-Pager version (a re-run of the same version replaces it)."""
     conn.execute(
         "INSERT OR REPLACE INTO fidelity_scores "
-        "(video_id, version, created_at, model, prompt_hashes, accuracy) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (video_id, version, _now(), model, json.dumps(prompt_hashes, sort_keys=True), accuracy),
+        "(video_id, version, created_at, model, prompt_hashes, accuracy, coverage) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (video_id, version, _now(), model, json.dumps(prompt_hashes, sort_keys=True),
+         accuracy, coverage),
     )
 
 
 def latest_fidelity_score(conn: sqlite3.Connection, video_id: str) -> dict | None:
     row = conn.execute(
-        "SELECT version, created_at, model, prompt_hashes, accuracy FROM fidelity_scores "
+        "SELECT version, created_at, model, prompt_hashes, accuracy, coverage FROM fidelity_scores "
         "WHERE video_id = ? ORDER BY version DESC LIMIT 1",
         (video_id,),
     ).fetchone()
     if row is None:
         return None
     return {"version": row[0], "created_at": row[1], "model": row[2],
-            "prompt_hashes": json.loads(row[3]), "accuracy": row[4]}
+            "prompt_hashes": json.loads(row[3]), "accuracy": row[4], "coverage": row[5]}
 
 
 def list_episodes(conn: sqlite3.Connection, limit: int | None = None) -> list[dict]:
     """Episodes newest first, each with its latest Job (and steps) and latest One-Pager version.
 
     Each item: the `get_episode` keys plus `job` (as `get_latest_job_with_steps`, or None)
-    `one_pager_version` (int or None) and `fidelity_accuracy` (the score of the latest One-Pager version, or None).
+    `one_pager_version` (int or None) and `fidelity_accuracy` and `fidelity_coverage` (scores of the latest One-Pager version, or None).
     """
     sql = (
         "SELECT e.video_id, e.url, e.title, e.duration_seconds, e.created_at, "
         "(SELECT MAX(version) FROM one_pager_versions o WHERE o.video_id = e.video_id), "
         "(SELECT accuracy FROM fidelity_scores f WHERE f.video_id = e.video_id "
+        "AND f.version = (SELECT MAX(version) FROM one_pager_versions o2 "
+        "WHERE o2.video_id = e.video_id)), "
+        "(SELECT coverage FROM fidelity_scores f WHERE f.video_id = e.video_id "
         "AND f.version = (SELECT MAX(version) FROM one_pager_versions o2 "
         "WHERE o2.video_id = e.video_id)) "
         "FROM episodes e ORDER BY e.created_at DESC, e.rowid DESC"
@@ -223,7 +227,8 @@ def list_episodes(conn: sqlite3.Connection, limit: int | None = None) -> list[di
         params = (int(limit),)
     rows = conn.execute(sql, params).fetchall()
     keys = ("video_id", "url", "title", "duration_seconds", "created_at")
-    items = [dict(zip(keys, r[:5]), one_pager_version=r[5], fidelity_accuracy=r[6], job=None) for r in rows]
+    items = [dict(zip(keys, r[:5]), one_pager_version=r[5],
+                  fidelity_accuracy=r[6], fidelity_coverage=r[7], job=None) for r in rows]
     if not items:
         return items
     by_id = {i["video_id"]: i for i in items}

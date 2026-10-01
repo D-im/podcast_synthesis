@@ -6,9 +6,10 @@ import sys
 import uvicorn
 
 from app import checks, env
-from app.config import ConfigError, load_config
+from app.config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from app.store import db
 from app.web.app import create_app
+from app.web.flags import Thresholds
 from app.worker import Worker, build_adapters
 
 HOST = "127.0.0.1"  # fixed: localhost only, no auth
@@ -43,6 +44,9 @@ def run() -> None:
     worker = Worker(db.DEFAULT_DATA_DIR, adapters)
     worker.start()
     try:
-        uvicorn.run(create_app(warnings, db.DEFAULT_DATA_DIR, config.daily_cap_usd), host=HOST, port=config.port)
+        app = create_app(
+            warnings, db.DEFAULT_DATA_DIR, config.daily_cap_usd, DEFAULT_CONFIG_PATH,
+            Thresholds(config.accuracy_threshold, config.coverage_threshold))
+        uvicorn.run(app, host=HOST, port=config.port)
     finally:
         worker.stop()

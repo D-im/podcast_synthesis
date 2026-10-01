@@ -43,16 +43,52 @@ class Meter:
         self.rows.append((provider, amount, ref))
 
 
+IDEAS = [dict(id=1, title="The bridge", description="A bridge is proposed."),
+         dict(id=2, title="The risk", description="B thinks it is risky.")]
+
+
+def ideas_reply(ideas=None, **kw):
+    base = dict(id="chatcmpl_ideas", finish_reason="stop", prompt_tokens=1000,
+                completion_tokens=100, content=json.dumps({"ideas": IDEAS if ideas is None else ideas}))
+    base.update(kw)
+    return Reply(**base)
+
+
+def cov_entry(i, coverage="covered", where="Summary", note=""):
+    return dict(id=i, coverage=coverage, where=where, note=note)
+
+
+def coverage_reply(entries=None, **kw):
+    entries = [cov_entry(1), cov_entry(2)] if entries is None else entries
+    base = dict(id="chatcmpl_cov", finish_reason="stop", prompt_tokens=1000,
+                completion_tokens=100, content=json.dumps({"ideas": entries}))
+    base.update(kw)
+    return Reply(**base)
+
+
 class FakeClient:
-    def __init__(self, reply=None, error=None):
-        self.reply, self.error, self.calls = reply, error, []
+    """`reply` answers the claims pass. The ideas and coverage passes get defaults (or
+    `ideas`/`coverage`). `calls` holds the claims calls; `all_calls` holds every call."""
+
+    def __init__(self, reply=None, error=None, ideas=None, coverage=None, errors=None):
+        self.reply, self.error, self.calls, self.all_calls = reply, error, [], []
+        self.ideas = ideas if ideas is not None else ideas_reply()
+        self.coverage = coverage if coverage is not None else coverage_reply()
+        self.errors = errors or {}     # response format name -> exception
 
     def create(self, model, max_completion_tokens, system, user, response_format):
-        self.calls.append(SimpleNamespace(model=model, max=max_completion_tokens, system=system,
-                                          user=user, rf=response_format))
-        if self.error:
+        name = response_format["json_schema"]["name"]
+        call = SimpleNamespace(model=model, max=max_completion_tokens, system=system,
+                               user=user, rf=response_format, name=name)
+        self.all_calls.append(call)
+        if name == "claim_check":
+            self.calls.append(call)
+        if name in self.errors:
+            raise self.errors[name]
+        if self.error and (name == "idea_list" or not self.errors):
             raise self.error
-        return self.reply
+        return {"idea_list": self.ideas, "claim_check": self.reply,
+                "coverage_check": self.coverage}[name]
 
 
 def claim(verdict="supported", evidence="the plan is risky", section="Summary", claim="B calls it risky",
@@ -80,11 +116,13 @@ def test_happy_path_accuracy_and_cost():
                     section="Ideas", note="said two billion")]
     c, m = FakeClient(reply(claims)), Meter()
     r = make(c).verify(TRANSCRIPT, PAGE, m)
-    assert r.accuracy == 0.8 and r.coverage is None
+    assert r.accuracy == 0.8 and r.coverage == 1.0
     assert [(u.section, u.claim, u.note) for u in r.unsupported_claims] == [
         ("Ideas", "The bridge costs five billion", "said two billion")]
     assert len(r.claims) == 5 and r.model == "gpt-6.1-sol"
-    assert m.rows == [("openai", 230000, "chatcmpl_1")]
+    assert m.rows == [("openai", 3000, "chatcmpl_ideas"), ("openai", 230000, "chatcmpl_1"),
+                      ("openai", 3000, "chatcmpl_cov")]
+    assert [x.name for x in c.all_calls] == ["idea_list", "claim_check", "coverage_check"]
     assert len(c.calls) == 1
     call = c.calls[0]
     assert call.max == 16000 and call.model == "gpt-6.1-sol"
@@ -92,8 +130,10 @@ def test_happy_path_accuracy_and_cost():
     assert "[0:00:00] Speaker A: We should build" in call.user
     assert "<transcript>" in call.user and "<one_pager>" in call.user
     assert call.system == PROMPT.read_text()
-    assert r.prompt_hashes == {"verify_claims": __import__("hashlib").sha256(
-        PROMPT.read_bytes()).hexdigest()}
+    sha = lambda n: __import__("hashlib").sha256((ROOT.parent / "prompts" / n).read_bytes()).hexdigest()
+    assert r.prompt_hashes == {"verify_claims": sha("verify_claims.md"),
+                               "verify_ideas": sha("verify_ideas.md"),
+                               "verify_coverage": sha("verify_coverage.md")}
 
 
 def test_cost_math():
@@ -205,7 +245,7 @@ def test_truncated_records_cost_and_is_retryable():
     m = Meter()
     with pytest.raises(StepError) as e:
         make(FakeClient(reply(finish_reason="length"))).verify(TRANSCRIPT, PAGE, m)
-    assert e.value.retryable and "max_output_tokens" in e.value.message and len(m.rows) == 1
+    assert e.value.retryable and "max_output_tokens" in e.value.message and len(m.rows) == 2
 
 
 @pytest.mark.parametrize("bad", [
@@ -220,7 +260,7 @@ def test_bad_output_is_retryable_with_cost_recorded(bad):
     m = Meter()
     with pytest.raises(StepError) as e:
         make(FakeClient(bad)).verify(TRANSCRIPT, PAGE, m)
-    assert e.value.retryable and len(m.rows) == 1
+    assert e.value.retryable and len(m.rows) == 2   # the ideas pass and the failed claims pass
     assert "invented" not in e.value.message
 
 
@@ -368,7 +408,7 @@ def test_upgrade_from_populated_v5(tmp_path):
     conn.close()
     db.bootstrap(tmp_path)
     with closing(db.connect(tmp_path)) as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 7
         assert c.execute("select count(*) from one_pager_versions").fetchone()[0] == 1
         assert c.execute("select count(*) from fidelity_scores").fetchone()[0] == 0
 
@@ -386,8 +426,8 @@ def enqueue(data):
         submit.submit(c, f"https://www.youtube.com/watch?v={VID}")
 
 
-def real_verifier(client, **kw):
-    return OpenAIVerifier("gpt-6.1-sol", client_factory=lambda k: client,
+def real_verifier(client, model="gpt-6.1-sol", **kw):
+    return OpenAIVerifier(model, client_factory=lambda k: client,
                           environ={oa.KEY_VAR: KEY}, **kw)
 
 
@@ -423,7 +463,8 @@ def test_full_worker_path_result_file_score_ledger_and_page(data):
     with closing(db.connect(data)) as c:
         assert episodes.latest_fidelity_score(c, VID)["accuracy"] == 0.75
         assert c.execute("select provider_ref, amount_micro_usd from spend_ledger "
-                         "where step='verify'").fetchall() == [("chatcmpl_abc", 230000)]
+                         "where step='verify' order by id").fetchall() == [
+            ("chatcmpl_ideas", 3000), ("chatcmpl_abc", 230000), ("chatcmpl_cov", 3000)]
     client_ = TestClient(create_app([], data))
     page = client_.get(f"/episodes/{VID}").text
     assert "75%" in page and "4 claims checked" in page and "can be wrong" in page
@@ -472,8 +513,8 @@ def test_two_versions_keep_the_earlier_result(data):
         episodes.set_job_state(c, job["id"], "queued")
         c.execute("update steps set state='pending' where job_id=? and name='summarize'",
                   (job["id"],))
-    w.adapters = replace(w.adapters, verifier=real_verifier(
-        FakeClient(reply([claim("unsupported", "", note="x")], id="chatcmpl_2"))))
+    w.adapters = replace(w.adapters, verifier=real_verifier(  # other model: the cache is not reused
+        FakeClient(reply([claim("unsupported", "", note="x")], id="chatcmpl_2")), model="other"))
     w.run_next()
     assert artifacts.one_pager_path(data, VID, 2).exists()
     assert artifacts.verification_path(data, VID, 1).read_bytes() == first
@@ -494,11 +535,12 @@ def test_finished_rule_reruns_verify_when_latest_result_missing(data):
         job = episodes.get_latest_job_with_steps(c, VID)
         episodes.set_job_state(c, job["id"], "queued")
     w.run_next()
-    assert len(client.calls) == 2 and artifacts.verification_path(data, VID, 1).exists()
+    # the rerun is served from the verify cache: no new calls
+    assert len(client.all_calls) == 3 and artifacts.verification_path(data, VID, 1).exists()
     with closing(db.connect(data)) as c:  # a finished job with its result is not redone
         episodes.set_job_state(c, job["id"], "queued")
     w.run_next()
-    assert len(client.calls) == 2
+    assert len(client.all_calls) == 3
 
 
 def test_fake_pipeline_writes_versioned_result_and_score(data):
@@ -539,7 +581,7 @@ def test_smoke_flags_the_planted_false_claim():
                              "1874. Speaker B says it was destroyed by a storm in 1900."),))
     m = Meter()
     r = OpenAIVerifier.from_config(load_config()).verify(transcript, page, m)
-    assert len(m.rows) == 1 and m.rows[0][1] < 10_000
+    assert len(m.rows) == 3 and sum(x[1] for x in m.rows) < 25_000   # ideas, claims, coverage
     verdicts = {c.claim: c.verdict for c in r.claims}
     assert any(v == "supported" for v in verdicts.values())
     assert any("storm" in u.claim.lower() or "1900" in u.claim for u in r.unsupported_claims)
@@ -566,7 +608,7 @@ def test_finish_reason_other_than_stop_is_an_error():
     m = Meter()
     with pytest.raises(StepError, match="stopped early") as e:
         make(c).verify(TRANSCRIPT, PAGE, m)
-    assert e.value.retryable and len(m.rows) == 1
+    assert e.value.retryable and len(m.rows) == 2
 
 
 @pytest.mark.parametrize("bad", [dict(claim="  "), dict(section="")])

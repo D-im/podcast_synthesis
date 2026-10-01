@@ -15,6 +15,7 @@ from app.core import submit as core_submit
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
 from app.ports import OnePager, Transcript
 from app.store import artifacts, db, episodes, spend
+from app.web.flags import Thresholds, flags, read_thresholds
 from app.web.library import build_library, local_datetime, percent
 from app.web.status import describe_job, describe_spend, format_timestamp
 
@@ -22,12 +23,19 @@ TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
-               daily_cap_usd: float = 5.0) -> FastAPI:
+               daily_cap_usd: float = 5.0, config_path: Path | None = None,
+               thresholds: Thresholds = Thresholds()) -> FastAPI:
     app = FastAPI()
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")),
               name="static")
 
     cap_text = format_usd(to_micro(daily_cap_usd), 2)
+    current = {"t": thresholds}
+
+    def current_thresholds() -> Thresholds:
+        """Re-read on each request; an unreadable or invalid file keeps the last good values."""
+        current["t"] = read_thresholds(config_path, current["t"])
+        return current["t"]
 
     def today_spend() -> str:
         """Header text: today's (local day) spend against the Daily Cap. Read-only."""
@@ -43,7 +51,7 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
                       url: str = "", q: str | None = None):
         try:
             with closing(db.connect(data_dir)) as conn:
-                library = build_library(conn, data_dir, q)
+                library = build_library(conn, data_dir, q, current_thresholds())
             library["unavailable"] = False
         except (sqlite3.Error, OSError, RuntimeError, KeyError, TypeError, ValueError):
             library = {"query": "", "rows": [], "truncated": False, "unavailable": True}
@@ -102,6 +110,7 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         status["fidelity"] = None
         status["verification"] = None
         status["verification_skipped"] = None
+        status["flags"] = []
         status["one_pager"] = None
         status["one_pager_error"] = None
         summarized = any(s["name"] == "summarize" and s["state"] == "done"
@@ -124,6 +133,9 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             status["verification"] = read_verification(video_id, latest["version"])
             if status["verification"] is not None:
                 status["fidelity"] = status["verification"]["accuracy"]
+            v = status["verification"]
+            status["flags"] = flags(v and v["accuracy_raw"], v and v["coverage_raw"],
+                                    current_thresholds()) if v else []
         verify_step = next((s for s in (job or {}).get("steps", [])
                             if s["name"] == "verify"), None)
         if (status["verification"] is None and verify_step is not None
@@ -141,8 +153,20 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             unsupported = [
                 {"section": str(u["section"]), "claim": str(u["claim"]), "note": str(u["note"])}
                 for u in data["unsupported_claims"]]
-            return {"version": version, "accuracy": pct, "checked": len(data["claims"]),
-                    "unsupported": unsupported}
+            cov_raw = data.get("coverage")
+            cov_pct = percent(cov_raw)
+            if cov_pct is None:
+                cov_raw = None
+            missed = []
+            if cov_raw is not None:
+                for m in data.get("missed_ideas") or []:
+                    if isinstance(m, dict) and m.get("title"):   # a bad entry is skipped
+                        missed.append({"title": str(m["title"]),
+                                       "coverage": str(m.get("coverage", "")),
+                                       "note": str(m.get("note", ""))})
+            return {"version": version, "accuracy": pct, "accuracy_raw": data["accuracy"],
+                    "coverage": cov_pct, "coverage_raw": cov_raw, "missed": missed,
+                    "checked": len(data["claims"]), "unsupported": unsupported}
         except (ValueError, OSError, KeyError, TypeError, RecursionError):
             return None
 

@@ -326,7 +326,7 @@ def test_upgrade_from_populated_v4(tmp_path):
     conn.close()
     db.bootstrap(tmp_path)
     with closing(db.connect(tmp_path)) as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 7
         assert c.execute("select amount_micro_usd from spend_ledger").fetchall() == [(7,)]
         assert c.execute("select count(*) from one_pager_versions").fetchone()[0] == 0
 
@@ -499,7 +499,7 @@ class RecordingVerifier:
     def __init__(self):
         self.seen = []
 
-    def verify(self, transcript, one_pager, meter):
+    def verify(self, transcript, one_pager, meter, cache=None):
         self.seen.append(one_pager.sections[0].text)
         from app.ports import VerificationResult
         return VerificationResult(1.0, 1.0, (), ())
