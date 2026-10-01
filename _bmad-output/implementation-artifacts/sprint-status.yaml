@@ -54,7 +54,7 @@ development_status:
   2-2-check-coverage-of-the-main-ideas-and-flag-low-scores: done
   2-3-prove-the-checker-catches-planted-errors: done
   2-4-regenerate-a-one-pager-on-request: done
-  2-5-record-a-verdict: in-progress
+  2-5-record-a-verdict: done
   epic-2-retrospective: optional
 
   epic-3: in-progress
