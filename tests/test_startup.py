@@ -298,6 +298,29 @@ def test_run_exits_cleanly_when_recovery_fails(monkeypatch, tmp_path, capsys, er
     assert "Startup error" in capsys.readouterr().err
 
 
+def test_run_wires_the_daily_cap_into_submissions_and_the_worker(monkeypatch, tmp_path):
+    from app.config import DEFAULT_CONFIG_PATH
+    captured = {}
+
+    def serve(app, **kw):
+        captured["app"] = app
+
+    workers = _run_wiring(monkeypatch, tmp_path, serve=serve)
+    monkeypatch.setattr(main, "DEFAULT_CONFIG_PATH", FAKE)
+    main.run()
+    assert workers[0].config_path == FAKE          # paid steps are checked against the cap
+    c = TestClient(captured["app"], follow_redirects=False)
+    r = c.post("/submit", content="url=https://youtu.be/dQw4w9WgXcQ",
+               headers={"content-type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 303
+    from contextlib import closing
+    from app.store import episodes
+    with closing(db.connect(tmp_path)) as conn:
+        ep = episodes.get_episode(conn, "dQw4w9WgXcQ")
+        job = episodes.get_latest_job_with_steps(conn, "dQw4w9WgXcQ")
+    assert ep["duration_seconds"] == 3600 and job["estimate_micro"] is not None  # lookup ran
+
+
 def test_run_stops_worker_when_server_raises(monkeypatch, tmp_path):
     def serve(app, **kw):
         raise RuntimeError("server died")

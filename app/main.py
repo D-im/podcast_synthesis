@@ -57,7 +57,7 @@ def run() -> None:
         app = create_app(
             warnings, db.DEFAULT_DATA_DIR, config.daily_cap_usd, DEFAULT_CONFIG_PATH,
             Thresholds(config.accuracy_threshold, config.coverage_threshold),
-            lookup=getattr(adapters.downloader, "lookup", None))
+            lookup=adapters.downloader.lookup)   # required: the Daily Cap needs it
         uvicorn.run(app, host=HOST, port=config.port)
     finally:
         worker.stop()

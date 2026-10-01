@@ -228,3 +228,22 @@ def test_resume_is_post_only(data, cfg):
     crossing(data, cfg)
     assert client(data, cfg).get(f"/episodes/{VID}/resume").status_code in (404, 405)
     assert job(data)["state"] == "paused"
+
+
+def test_saved_vendor_job_is_collected_even_over_the_cap(data, cfg):
+    set_cap(cfg, 0.0001)
+    queue(data)
+    set_duration(data, 3600)
+    with closing(db.connect(data)) as c:
+        jid = job(data)["id"]
+        for name in ("download",):
+            episodes.set_step_state(c, jid, name, "done")
+        episodes.set_vendor_job_id(c, jid, "transcribe", "vendor-1")
+    artifacts.write_json(artifacts.artifact_path(data, VID, artifacts.AUDIO).with_suffix(".tmpx"), {})
+    path = artifacts.artifact_path(data, VID, artifacts.AUDIO)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"audio")
+    w, b = worker(data, cfg, cost=0)
+    w.run_next()
+    assert "transcribe" in b.calls                       # not paused before collecting it
+    assert job(data)["state"] == "paused" and states(data)["transcribe"] == "done"

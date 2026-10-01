@@ -28,3 +28,8 @@
 ## Deferred from: code review of story-3.1 (2026-10-01)
 
 - Two app instances at once: the second start-up `recover()` resets a Job the first instance is running, and its worker can start it before the port bind fails (possible duplicate paid calls). Needs a single-instance lock. Unverified in practice; would be medium.
+
+## Deferred from: code review of Epic 3 stories 3.2-3.4 (2026-10-01)
+
+- The Daily Cap is soft: admission and the step guard count only recorded spend plus the one estimate, not estimates of other queued Jobs. Several admitted Jobs can together exceed the cap. A committed-spend model would fix it.
+- Episodes created before Story 3.3 have no stored estimate, so the Episode page shows no estimate-vs-actual line for them.

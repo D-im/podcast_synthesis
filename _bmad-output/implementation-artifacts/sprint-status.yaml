@@ -57,9 +57,9 @@ development_status:
   2-5-record-a-verdict: done
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-recover-after-sleep-or-restart: done
-  3-2-retry-a-failed-job: review
-  3-3-refuse-a-submission-that-would-exceed-the-daily-cap: review
-  3-4-pause-a-job-that-hits-the-cap-mid-run-and-resume-it-on-reque: review
+  3-2-retry-a-failed-job: done
+  3-3-refuse-a-submission-that-would-exceed-the-daily-cap: done
+  3-4-pause-a-job-that-hits-the-cap-mid-run-and-resume-it-on-reque: done
   epic-3-retrospective: optional

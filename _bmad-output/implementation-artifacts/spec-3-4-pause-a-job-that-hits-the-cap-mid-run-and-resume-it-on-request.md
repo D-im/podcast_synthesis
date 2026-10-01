@@ -22,3 +22,24 @@ Before each paid step (transcribe, summarize, verify) the pipeline asks one func
 ## Verification
 
 - `uv run pytest -q` passes offline, including a fake-adapter Job that crosses the cap, pauses before verify with artifacts kept, and resumes to run only verify. Not done: no real-money run and no code-review pass (story is in `review`).
+
+### Review Findings (Epic 3 review of Stories 3.2, 3.3 and 3.4, diff 062e400..c2dc15c)
+
+- [x] [Review][Patch] Production wiring of the Daily Cap (`Worker(config_path)`, `create_app(lookup)`) untested; removing either passed every test [tests/test_startup.py]
+- [x] [Review][Patch] `getattr(adapters.downloader, "lookup", None)` silently turned submission admission off if a downloader lacked `lookup`; now required [app/main.py]
+- [x] [Review][Patch] The guard could pause a transcribe whose AssemblyAI job is already saved (paid at the vendor) before collecting it; a saved vendor job ID now skips the guard [app/core/pipeline.py]
+- [x] [Review][Patch] Regeneration refusal omitted cap, today's spend and estimate (Story 3.3 "refused in the same way") [app/web/app.py]
+- [x] [Review][Patch] `ArithmeticError` (infinite duration) escaped admission as a 500; `today_micro` re-export hack removed [app/core/admission.py, app/web/app.py]
+- [x] [Review][Defer] Cap is soft: only recorded spend counts, not estimates of other queued Jobs, so several admitted Jobs can together pass the cap — deferred: Story 3.3 defines the check as "actual spend plus the estimate"; a committed-spend model is a design change
+- [x] [Review][Defer] Episodes created before Story 3.3 have no stored estimate, so no "estimate vs actual" line; transcribe is estimated from the duration the download step stores, so they are still checked — deferred: cosmetic
+
+#### Rejected
+
+- NULL duration lets transcribe bypass the cap — false: the download step stores the duration before transcribe is checked, and new submissions store it at admission.
+- Zero-estimate steps bypass `check_budget` — documented decision (a step that costs nothing cannot go over); `Blocked` sizing returns 0 only when the Transcript is unreadable, and the step then fails itself.
+- Guard raising a non-`StepError` leaves the Job `running` — low: only a database error, handled like any other worker error and recovered at the next start.
+- Retry checks `active` before `not_failed`, so a paused Job's notice does not mention Resume — low: wording, both 409.
+- Resume check not atomic with the requeue — low: the worker re-checks at every step boundary.
+- `attempts` counts resumes and recoveries, and a guard-failed step stays at 1 — low: shown as "Attempts", counts starts.
+- Admission refuses a $0 estimate at the cap while the guard allows it — matches Story 3.3 ("refused for the same reason", spec "anything").
+- No lookup for `post_live` or playlists, `retry_notice` naming, CSRF, magic number 18, test dependence on real prices, lookup-test strictness — low or cosmetic for a single-user localhost app.

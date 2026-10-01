@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable
 
 from app.config import ConfigError, load_config
-from app.core.budget import check_budget, today_micro  # noqa: F401
+from app.core.budget import check_budget, today_micro
 from app.core.estimate import Prices, estimate_job
 from app.core.meter import format_usd, to_micro
 from app.core.submit import Rejected
@@ -41,7 +41,7 @@ def admit(conn: sqlite3.Connection, video_id: str, url: str, lookup: Lookup,
         prices = Prices.from_config(config)
         est = estimate_job(found.duration_seconds, prices)
         cap = to_micro(config.daily_cap_usd)
-    except (ConfigError, KeyError, TypeError, ValueError, OSError):
+    except (ConfigError, KeyError, TypeError, ValueError, OSError, ArithmeticError):
         return Rejected("The config file could not be read, so the cost cannot be estimated. "
                         "Nothing was created.", 409)
     today = today_micro(conn)

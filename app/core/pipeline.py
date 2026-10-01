@@ -137,7 +137,10 @@ def run_job(
         if name == "verify" and adapters.verifier is None:
             episodes.set_step_state(conn, job_id, name, "skipped", NO_VERIFIER_REASON)
             continue
-        if config_path is not None and name in guard.PAID_STEPS:
+        committed = (name == "transcribe"
+                     and episodes.get_vendor_job_id(conn, job_id, name) is not None)
+        # a saved vendor job is already paid for at the vendor: collecting it must not pause
+        if config_path is not None and name in guard.PAID_STEPS and not committed:
             try:
                 decision = guard.check_step(conn, data_dir, video_id, name, config_path)
             except StepError as e:

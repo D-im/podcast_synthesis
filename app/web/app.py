@@ -16,7 +16,7 @@ from app.config import ConfigError, DEFAULT_CONFIG_PATH, load_config
 from app.core import admission as core_admission
 from app.core import guard as core_guard
 from app.core import regenerate as core_regen
-from app.core.budget import check_budget
+from app.core.budget import check_budget, today_micro
 from app.core import submit as core_submit
 from app.core import verdict as core_verdict
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
@@ -430,9 +430,11 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
                 if not re.fullmatch(r"[0-9]{1,18}", posted) or int(posted) != est.total_micro:
                     return "stale"
                 cap = to_micro(config.daily_cap_usd)
-                decision = check_budget(core_admission.today_micro(conn), est.total_micro, cap)
+                decision = check_budget(today_micro(conn), est.total_micro, cap)
                 if not decision.allowed:
-                    return "over_cap:" + decision.reason
+                    return ("over_cap:" + decision.reason + f". Cap {format_usd(cap, 2)}, "
+                            f"today's spend {format_usd(decision.today_micro, 2)}, estimate "
+                            f"{format_usd(est.total_micro)}")
                 core_regen.enqueue(conn, data_dir, video_id, est.total_micro)
                 return "queued"
 

@@ -231,6 +231,7 @@ def test_regeneration_over_cap_refused_same_way(data, cfg):
     # the estimate does not depend on the cap, so it still matches and the cap decides
     r = regen_post(c, est)
     assert r.status_code == 409 and "Refused" in r.text and "Nothing was started" in r.text
+    assert "Cap $0.01" in r.text and "today&#39;s spend" in r.text and "estimate $" in r.text
     with closing(db.connect(data)) as conn:
         assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 1
 
