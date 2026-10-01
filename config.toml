@@ -32,6 +32,11 @@ map_output_tokens = 4096
 max_input_tokens = 250000   # skip the check above this (estimate: 1 token per 3 characters)
 max_output_tokens = 16000
 
+[retry]   # brief network or vendor trouble (sleep, wifi drop): retry one call with backoff
+max_retries = 4
+base_delay_seconds = 5
+max_delay_seconds = 60
+
 [pricing]
 transcription_usd_per_hour = 0.23   # includes speaker labels
 summarizer_input_usd_per_million = 2.0

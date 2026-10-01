@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from app.core.meter import to_micro
+from app.core.retry import Retry
 from app.ports import Meter, Resume, Segment, StepError, Transcript
 
 log = logging.getLogger(__name__)
@@ -210,7 +211,9 @@ class AssemblyAITranscriber:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         environ=None,
+        retry: Retry = Retry(),
     ):
+        self.retry = retry
         self.speaker_labels = speaker_labels
         self.usd_per_hour = usd_per_hour
         self.poll_interval = poll_interval_seconds
@@ -235,6 +238,7 @@ class AssemblyAITranscriber:
             max_wait_minutes=config.max_wait_minutes,
             compress_before_upload=config.compress_before_upload,
             upload_bitrate_kbps=config.upload_bitrate_kbps,
+            retry=Retry.from_config(config),
         )
 
     def transcribe(self, audio_path: Path, meter: Meter, resume: Resume) -> Transcript:
@@ -296,7 +300,8 @@ class AssemblyAITranscriber:
 
     def _submit(self, client: Client, audio_path: Path) -> str:
         try:
-            return client.submit(audio_path)
+            return self.retry.call(lambda: client.submit(audio_path),
+                                   lambda e: isinstance(e, Transient))
         except AuthRejected:
             raise _rejected() from None
         except Transient as e:

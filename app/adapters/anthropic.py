@@ -21,6 +21,7 @@ from typing import Any, Callable, Protocol
 from app.config import DEFAULT_CONFIG_PATH, PROJECT_ROOT, ConfigError, load_config
 from app.core.chunking import estimate_tokens, split_transcript
 from app.core.meter import to_micro
+from app.core.retry import Retry
 from app.core.text import format_timestamp, transcript_text
 from app.ports import Meter, NotesCache, OnePager, Section, StepError, Transcript
 
@@ -257,6 +258,7 @@ class AnthropicSummarizer:
         config_path: Path = DEFAULT_CONFIG_PATH,
         map_prompt_path: Path | None = None,
         reduce_prompt_path: Path | None = None,
+        retry: Retry = Retry(),
     ):
         self.model = model
         self.input_rate = input_usd_per_million
@@ -268,6 +270,7 @@ class AnthropicSummarizer:
         self.reduce_prompt_path = Path(
             reduce_prompt_path or self.prompt_path.with_name("summarize_reduce.md"))
         self.config_path = Path(config_path)
+        self.retry = retry
         self.client_factory = client_factory or (lambda key: SdkClient(key))
         self.environ = os.environ if environ is None else environ
 
@@ -278,6 +281,7 @@ class AnthropicSummarizer:
             input_usd_per_million=config.summarizer_input_usd_per_million,
             output_usd_per_million=config.summarizer_output_usd_per_million,
             max_output_tokens=config.anthropic_max_output_tokens,
+            retry=Retry.from_config(config),
         )
 
     def _load_prompt(self) -> Prompt:
@@ -303,7 +307,7 @@ class AnthropicSummarizer:
                 ) -> Reply:
         """Run one call, mapping vendor errors to StepErrors. `where` names the part."""
         try:
-            return call()
+            return self.retry.call(call, lambda e: isinstance(e, Transient))
         except AuthRejected:
             raise StepError(f"Anthropic rejected the API key; check {KEY_VAR}", True) from None
         except Transient as e:

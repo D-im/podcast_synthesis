@@ -39,6 +39,9 @@ class Config:
     verifier_output_usd_per_million: float = 10.0
     openai_max_input_tokens: int = 250000
     openai_max_output_tokens: int = 16000
+    max_retries: int = 4
+    retry_base_delay_seconds: float = 5.0
+    retry_max_delay_seconds: float = 60.0
 
 
 JS_RUNTIMES = ("node", "deno")
@@ -159,6 +162,15 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
     if isinstance(oai_out, bool) or not isinstance(oai_out, int) or not 0 < oai_out <= 100000:
         raise ConfigError(
             f"{path}: [openai] 'max_output_tokens' must be an integer from 1 to 100000")
+    rt = _optional_table(data, "retry", path)
+    retries = rt.get("max_retries", 4)
+    if isinstance(retries, bool) or not isinstance(retries, int) or not 0 <= retries <= 10:
+        raise ConfigError(f"{path}: [retry] 'max_retries' must be an integer from 0 to 10")
+    rt_base = _positive(rt, "base_delay_seconds", 5.0, "retry", path)
+    rt_max = _positive(rt, "max_delay_seconds", 60.0, "retry", path)
+    if rt_max < rt_base:
+        raise ConfigError(
+            f"{path}: [retry] 'max_delay_seconds' must not be below 'base_delay_seconds'")
     providers = _str_table(data, "providers", path)
     # AD-13: the checker must come from a different vendor than the writer
     v_norm, s_norm = providers["verifier"].strip().lower(), providers["summarizer"].strip().lower()
@@ -198,6 +210,9 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
         verifier_output_usd_per_million=ver_out,
         openai_max_input_tokens=oai_in,
         openai_max_output_tokens=oai_out,
+        max_retries=retries,
+        retry_base_delay_seconds=rt_base,
+        retry_max_delay_seconds=rt_max,
         providers=providers,
         models=_str_table(data, "models", path, MODEL_ROLES),
         accuracy_threshold=acc,

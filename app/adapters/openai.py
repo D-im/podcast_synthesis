@@ -23,6 +23,7 @@ from typing import Any, Callable, Protocol
 
 from app.adapters.anthropic import _read_plain_prompt, cost_micro_usd
 from app.config import PROJECT_ROOT
+from app.core.retry import Retry
 from app.core.text import transcript_text
 from app.ports import (
     Claim, IdeaCheck, Meter, MissedIdea, NotesCache, OnePager, StepError, StepSkipped,
@@ -292,6 +293,7 @@ class OpenAIVerifier:
         environ=None,
         ideas_prompt_path: Path = DEFAULT_IDEAS_PROMPT_PATH,
         coverage_prompt_path: Path = DEFAULT_COVERAGE_PROMPT_PATH,
+        retry: Retry = Retry(),
     ):
         self.model = model
         self.input_rate = input_usd_per_million
@@ -301,6 +303,7 @@ class OpenAIVerifier:
         self.prompt_path = Path(prompt_path)
         self.ideas_prompt_path = Path(ideas_prompt_path)
         self.coverage_prompt_path = Path(coverage_prompt_path)
+        self.retry = retry
         self.client_factory = client_factory or (lambda key: SdkClient(key))
         self.environ = os.environ if environ is None else environ
 
@@ -312,13 +315,16 @@ class OpenAIVerifier:
             output_usd_per_million=config.verifier_output_usd_per_million,
             max_input_tokens=config.openai_max_input_tokens,
             max_output_tokens=config.openai_max_output_tokens,
+            retry=Retry.from_config(config),
         )
 
     def _call(self, client: Client, system: str, user: str, label: str,
               response_format: dict = RESPONSE_FORMAT) -> Reply:
         try:
-            return client.create(self.model, self.max_output_tokens, system, user,
-                                 response_format)
+            return self.retry.call(
+                lambda: client.create(self.model, self.max_output_tokens, system, user,
+                                      response_format),
+                lambda e: isinstance(e, Transient))
         except AuthRejected:
             raise StepError(f"OpenAI rejected the API key; check {KEY_VAR}", True) from None
         except Transient as e:
