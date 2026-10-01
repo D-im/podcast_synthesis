@@ -51,7 +51,7 @@ def run() -> None:
         raise SystemExit(1) from None
     if recovered:
         print(f"Recovered {recovered} interrupted Job(s)")
-    worker = Worker(db.DEFAULT_DATA_DIR, adapters)
+    worker = Worker(db.DEFAULT_DATA_DIR, adapters, config_path=DEFAULT_CONFIG_PATH)
     worker.start()
     try:
         app = create_app(

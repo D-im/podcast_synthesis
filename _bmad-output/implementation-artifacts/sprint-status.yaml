@@ -61,5 +61,5 @@ development_status:
   3-1-recover-after-sleep-or-restart: done
   3-2-retry-a-failed-job: review
   3-3-refuse-a-submission-that-would-exceed-the-daily-cap: review
-  3-4-pause-a-job-that-hits-the-cap-mid-run-and-resume-it-on-reque: backlog
+  3-4-pause-a-job-that-hits-the-cap-mid-run-and-resume-it-on-reque: review
   epic-3-retrospective: optional

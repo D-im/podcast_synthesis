@@ -106,6 +106,10 @@ MIGRATIONS: list[list[str]] = [
     [
         "ALTER TABLE jobs ADD COLUMN estimate_micro INTEGER",
     ],
+    # 11: why a Job is paused (Story 3.4)
+    [
+        "ALTER TABLE jobs ADD COLUMN pause_reason TEXT",
+    ],
 ]
 
 

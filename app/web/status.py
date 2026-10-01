@@ -42,6 +42,8 @@ def describe_job(episode: dict, job: dict | None, spend: dict | None = None) -> 
         label = RUNNING_LABELS.get(current["name"], "Running") if current else "Running"
     elif state == "done":
         label = "Done"
+    elif state == "paused":
+        label = "Paused (Daily Cap)"
     elif state == "failed":
         label = f"Failed at {failed['name']}" if failed else "Failed"
         message = failed.get("message") if failed else None

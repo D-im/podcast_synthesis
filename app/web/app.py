@@ -14,12 +14,13 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import ConfigError, DEFAULT_CONFIG_PATH, load_config
 from app.core import admission as core_admission
+from app.core import guard as core_guard
 from app.core import regenerate as core_regen
 from app.core.budget import check_budget
 from app.core import submit as core_submit
 from app.core import verdict as core_verdict
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
-from app.ports import OnePager, Transcript
+from app.ports import OnePager, StepError, Transcript
 from app.store import artifacts, db, episodes, spend
 from app.web.flags import Thresholds, flags, read_thresholds
 from app.web.library import build_library, local_datetime, percent
@@ -110,6 +111,21 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             verdict_rows = episodes.list_verdicts(conn, video_id) if episode else []
             can_regen = (core_regen.can_regenerate(conn, data_dir, video_id)
                          if episode else False)
+            paused = None
+            if job is not None and job["state"] == "paused":
+                paused = {"reason": job.get("pause_reason") or "Paused.", "can_resume": False,
+                          "blocked": None}
+                try:
+                    step = core_guard.next_paid_step(job)
+                    d = (core_guard.check_step(conn, data_dir, video_id, step,
+                                               config_path or DEFAULT_CONFIG_PATH)
+                         if step else None)
+                    if d is None or d.allowed:
+                        paused["can_resume"] = True
+                    else:
+                        paused["blocked"] = d.reason[0].upper() + d.reason[1:] + "."
+                except StepError as e:
+                    paused["blocked"] = e.message
             job_actual = None
             if job is not None and job.get("estimate_micro") is not None:
                 try:
@@ -124,6 +140,7 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         status = describe_job(episode, job, cost)
         status["date"] = local_datetime(episode["created_at"])
         status["estimate"] = None
+        status["paused"] = paused
         if job is not None and job.get("estimate_micro") is not None:
             status["estimate"] = {"estimate": format_usd(job["estimate_micro"]),
                                   "actual": None if job_actual is None
@@ -221,6 +238,43 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             request, "episode.html",
             {"episode": episode, "status": status, "today_spend": today_spend()},
         )
+
+    @app.post("/episodes/{video_id}/resume")
+    async def resume_post(request: Request, video_id: str):
+        def work():
+            with closing(db.connect(data_dir)) as conn:
+                if episodes.get_episode(conn, video_id) is None:
+                    return "no_episode"
+                job = episodes.get_latest_job_with_steps(conn, video_id)
+                if job is None or job["state"] != "paused":
+                    return "not_paused"
+                step = core_guard.next_paid_step(job)
+                if step is not None:
+                    try:
+                        d = core_guard.check_step(conn, data_dir, video_id, step,
+                                                  config_path or DEFAULT_CONFIG_PATH)
+                    except StepError as e:
+                        return "blocked:" + e.message
+                    if not d.allowed:
+                        return "blocked:" + d.reason[0].upper() + d.reason[1:] + "."
+                return episodes.resume_paused_job(conn, video_id)
+
+        try:
+            outcome = await run_in_threadpool(work)
+        except (sqlite3.Error, OSError):
+            raise HTTPException(status_code=503,
+                                detail="The database is unavailable just now") from None
+        if outcome == "queued":
+            return RedirectResponse(f"/episodes/{video_id}", status_code=303)
+        if outcome == "no_episode":
+            raise HTTPException(status_code=404, detail="Episode not found")
+        notice = ("This Episode has no paused Job to resume." if outcome == "not_paused"
+                  else "Cannot resume yet: " + outcome[len("blocked:"):])
+        episode, status = await run_in_threadpool(load, video_id)
+        return TEMPLATES.TemplateResponse(
+            request, "episode.html",
+            {"episode": episode, "status": status, "today_spend": today_spend(),
+             "retry_notice": notice}, status_code=409)
 
     RETRY_MESSAGES = {
         "no_job": "This Episode has no failed Job to retry.",

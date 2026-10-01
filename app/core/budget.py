@@ -1,12 +1,14 @@
 """The one budget decision: today's actual spend plus an estimate against the Daily Cap (AD-8).
 
-Pure. Story 3.4 calls the same function before each paid step.
+`check_budget` is pure. Submissions, regenerations and every paid step all use it.
 """
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 
-from app.core.meter import format_usd
+from app.core.meter import format_usd, local_day_bounds_utc
+from app.store import spend
 
 
 @dataclass(frozen=True)
@@ -29,3 +31,9 @@ def check_budget(today_micro: int, estimate_micro: int, cap_micro: int) -> Budge
                   f"({format_usd(estimate_micro)}) would go over the Daily Cap "
                   f"({format_usd(cap_micro, 2)})")
     return BudgetDecision(reason is None, reason, cap_micro, today_micro, estimate_micro)
+
+
+def today_micro(conn: sqlite3.Connection) -> int:
+    """Actual spend recorded in the ledger during the current local day."""
+    start, end = local_day_bounds_utc()
+    return spend.total_between(conn, start, end)

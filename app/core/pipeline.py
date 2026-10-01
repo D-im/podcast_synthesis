@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
+from app.core import guard
 from app.core.meter import StepMeter
 from app.core.submit import STEP_NAMES
 from app.ports import Adapters, OnePager, StepError, StepSkipped, Transcript
@@ -50,8 +51,13 @@ def run_job(
     job: dict,
     adapters: Adapters,
     secrets: Callable[[], Iterable[str]] = lambda: (),
+    config_path: Path | None = None,
 ) -> str:
-    """Run a Job to completion or first failure. Returns the final Job state."""
+    """Run a Job to completion, first failure, or a Daily Cap pause. Returns the Job state.
+
+    With `config_path`, every paid step first goes through `guard.check_step`; over the cap the
+    Job is `paused` at that step boundary with every artifact kept.
+    """
     job_id, video_id = job["id"], job["video_id"]
     path = lambda step: artifacts.artifact_path(data_dir, video_id, ARTIFACT_FOR_STEP[step])
     def finished(step: str) -> bool:
@@ -131,6 +137,17 @@ def run_job(
         if name == "verify" and adapters.verifier is None:
             episodes.set_step_state(conn, job_id, name, "skipped", NO_VERIFIER_REASON)
             continue
+        if config_path is not None and name in guard.PAID_STEPS:
+            try:
+                decision = guard.check_step(conn, data_dir, video_id, name, config_path)
+            except StepError as e:
+                episodes.set_step_state(conn, job_id, name, "failed",
+                                        sanitize(e.message, secrets()), e.retryable)
+                episodes.set_job_state(conn, job_id, "failed")
+                return "failed"
+            if not decision.allowed:
+                episodes.pause_job(conn, job_id, guard.pause_reason(name, decision))
+                return "paused"
         episodes.set_step_state(conn, job_id, name, "running")
         try:
             run_step(name)

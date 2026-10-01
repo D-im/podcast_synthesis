@@ -68,7 +68,7 @@ def create_episode_with_job(
 
 def get_latest_job_with_steps(conn: sqlite3.Connection, video_id: str) -> dict | None:
     job = conn.execute(
-        "SELECT id, state, created_at, updated_at, estimate_micro FROM jobs "
+        "SELECT id, state, created_at, updated_at, estimate_micro, pause_reason FROM jobs "
         "WHERE video_id = ? ORDER BY id DESC LIMIT 1",
         (video_id,),
     ).fetchone()
@@ -85,6 +85,7 @@ def get_latest_job_with_steps(conn: sqlite3.Connection, video_id: str) -> dict |
         "created_at": job[2],
         "updated_at": job[3],
         "estimate_micro": job[4],
+        "pause_reason": job[5],
         "steps": [
             {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r, "attempts": a}
             for n, o, s, m, r, a in steps
@@ -393,3 +394,31 @@ def retry_failed_job(conn: sqlite3.Connection, video_id: str) -> str:
             conn.execute("ROLLBACK")
         raise
     return "queued"
+
+
+def pause_job(conn: sqlite3.Connection, job_id: int, reason: str) -> None:
+    conn.execute("UPDATE jobs SET state = 'paused', pause_reason = ?, updated_at = ? WHERE id = ?",
+                 (reason, _now(), job_id))
+
+
+def resume_paused_job(conn: sqlite3.Connection, video_id: str) -> str:
+    """Queue the Episode's latest Job again if it is paused. Returns `queued`, `no_episode`
+    or `not_paused`; nothing else changes."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if get_episode(conn, video_id) is None:
+            outcome = "no_episode"
+        else:
+            job = get_latest_job_with_steps(conn, video_id)
+            outcome = "queued" if job is not None and job["state"] == "paused" else "not_paused"
+        if outcome == "queued":
+            conn.execute("UPDATE jobs SET state = 'queued', pause_reason = NULL, updated_at = ? "
+                         "WHERE id = ?", (_now(), job["id"]))
+            conn.execute("COMMIT")
+        else:
+            conn.execute("ROLLBACK")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    return outcome

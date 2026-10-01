@@ -55,11 +55,12 @@ def configured_secrets() -> list[str]:
 
 class Worker:
     def __init__(self, data_dir: Path, adapters: Adapters, poll_interval: float = 0.2,
-                 secrets=configured_secrets):
+                 secrets=configured_secrets, config_path: Path | None = None):
         self.data_dir = Path(data_dir)
         self.adapters = adapters
         self.poll_interval = poll_interval
         self.secrets = secrets
+        self.config_path = config_path
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -69,7 +70,8 @@ class Worker:
             job = episodes.next_queued_job(conn)
             if job is None:
                 return False
-            pipeline.run_job(conn, self.data_dir, job, self.adapters, self.secrets)
+            pipeline.run_job(conn, self.data_dir, job, self.adapters, self.secrets,
+                             self.config_path)
             return True
 
     def _loop(self) -> None:

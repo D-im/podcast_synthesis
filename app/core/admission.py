@@ -10,12 +10,11 @@ from pathlib import Path
 from typing import Callable
 
 from app.config import ConfigError, load_config
-from app.core.budget import check_budget
+from app.core.budget import check_budget, today_micro  # noqa: F401
 from app.core.estimate import Prices, estimate_job
-from app.core.meter import format_usd, local_day_bounds_utc, to_micro
+from app.core.meter import format_usd, to_micro
 from app.core.submit import Rejected
 from app.ports import DownloadResult, StepError
-from app.store import spend
 
 Lookup = Callable[[str, str], DownloadResult]   # (video_id, url) -> title and duration, free
 
@@ -25,11 +24,6 @@ class Admitted:
     title: str
     duration_seconds: int
     estimate_micro: int
-
-
-def today_micro(conn: sqlite3.Connection) -> int:
-    start, end = local_day_bounds_utc()
-    return spend.total_between(conn, start, end)
 
 
 def admit(conn: sqlite3.Connection, video_id: str, url: str, lookup: Lookup,
