@@ -91,4 +91,25 @@ context:
 - Built as specified: `app/core/recovery.py` (called from `app/main.py` after bootstrap, before the worker), `app/core/retry.py` (`call_with_backoff` and a `Retry` settings object), `[retry]` in `config.toml` and `tests/fake_config.toml`, `tests/test_recovery.py`.
 - Judgment calls: adapters take a `retry` argument that defaults to no retries, so only `from_config` (the real app) retries and existing tests are unchanged. Retry wraps each single vendor call (Anthropic `_invoke`, OpenAI `_call`, AssemblyAI `_submit`) for the adapters' own `Transient` kind only. Recovery also clears a recovered step's old message and retryable flag. A temp-file sweep covers files only, not directories.
 - Kill tests raise a `BaseException` from an adapter so the pipeline cannot record a failure, leaving the Job `running` as a real kill would. The kill happens before the adapter does work, so "ran again" is shown by the Job completing with every step's work done once.
-- Not done: no real-network test of a sleep/wake; no code-review pass yet (story is in `review`).
+- Not done: no real-network test of a sleep/wake.
+- Review patches applied: backoff waits are stop-aware (`Stopping` is a `BaseException`, so a shutdown mid-wait leaves the Job `running` for recovery; `Worker.stop` wakes the wait), `main.run()` recovery wiring tests, `from_config` retry pass-through test, `RuntimeError` caught around recovery.
+
+### Review Findings
+
+- [x] [Review][Decision] (resolved: keep the retry; the duplicate needs a timeout after the vendor created the job, rarer than the network drop the retry exists for) AssemblyAI submit retried on a transient error can create a second paid job — `SdkClient.submit` uploads and creates the transcript in one SDK call, so a timeout after the vendor created the job looks identical to one before it; the retry then submits again, the first job is billed by the vendor but never reaches the ledger [app/adapters/assemblyai.py:_submit]
+- [x] [Review][Patch] Backoff waits cannot be interrupted: `Worker.stop` joins for 5 s while a wait can last 60 s (spec: waiting must not block shutdown; matrix row has no test). Use a stop-aware wait and leave the Job `running` (recovered at next start) [app/core/retry.py, app/worker.py]
+- [x] [Review][Patch] Start-up recovery wiring in `main.run()` is untested: moving or deleting the `recover` call, or breaking its error branch, passes every test [tests/test_startup.py]
+- [x] [Review][Patch] No test that each real adapter's `from_config` passes `[retry]` through; removing it from one adapter silently disables retries in production [tests/test_recovery.py]
+- [x] [Review][Patch] `main.run()` recovery block catches `OSError` and `sqlite3.Error` but `db.connect` can also raise `RuntimeError` (bootstrap already catches it), giving a traceback instead of the friendly exit [app/main.py]
+- [x] [Review][Defer] Two app instances at once: the second one's start-up `recover()` resets a Job the first is genuinely running, and its worker may start it before the port bind fails — deferred: needs a single-instance lock, a new mechanism beyond this story
+
+#### Rejected
+
+- Retry-After and jitter ignored — low: single user, one request at a time; the fix adds branches and parameters.
+- AssemblyAI polling not wrapped — false: polling already has its own backoff (`MAX_TRANSIENT_RETRIES`), and the spec leaves it unchanged.
+- Requeued Job with a `failed` step — false: the pipeline sets a step `failed` and the Job `failed` together, so a `running` Job never has one.
+- `*.tmp` cleanup may delete a partial needed for resume — false: `atomic_target` already removes the temp at the start of every run; nothing resumes from a temp file.
+- Kill tests do not show a call made again / duplicate ledger — low: kills before work, as noted in the spec; `test_kill_mid_step_then_restart_completes` already shows finished steps are not repeated.
+- Resume-transcribe checked only at the adapter level — low: the adapter and the stored vendor ID are tested separately and the pipeline path is unchanged.
+- `Retry()` default of 0 differs from the config default of 4, shared default instance, test helper splitting on literals, unbounded delay, startup `print` vs `log`, unused `video_id` — low or cosmetic.
+- Startup exit on database error not in the spec — informational.

@@ -11,7 +11,7 @@ from pathlib import Path
 from app import env
 from app.adapters import fakes
 from app.config import Config
-from app.core import pipeline
+from app.core import pipeline, retry
 from app.ports import Adapters
 from app.store import db, episodes
 
@@ -76,6 +76,8 @@ class Worker:
         while not self._stop.is_set():
             try:
                 ran = self.run_next()
+            except retry.Stopping:
+                return  # shut down during a backoff wait; the Job stays running and is recovered
             except Exception as e:  # never log the message: it could hold transcript text
                 log.error("worker error: %s", type(e).__name__)
                 ran = False
@@ -86,11 +88,16 @@ class Worker:
         if self._thread is not None:
             return
         self._stop.clear()
+        retry.clear_stop()
         self._thread = threading.Thread(target=self._loop, name="worker", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         self._stop.set()
+        retry.request_stop()   # wakes a backoff wait
         if self._thread is not None:
             self._thread.join(timeout=5)  # a long step must not hang shutdown
+            alive = self._thread.is_alive()
             self._thread = None
+            if not alive:
+                retry.clear_stop()

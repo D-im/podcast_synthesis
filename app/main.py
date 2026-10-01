@@ -46,7 +46,7 @@ def run() -> None:
     try:
         with closing(db.connect(db.DEFAULT_DATA_DIR)) as conn:
             recovered = recover(conn, db.DEFAULT_DATA_DIR)
-    except (OSError, sqlite3.Error) as e:
+    except (OSError, sqlite3.Error, RuntimeError) as e:
         print(f"Startup error: cannot recover interrupted Jobs ({e})", file=sys.stderr)
         raise SystemExit(1) from None
     if recovered:

@@ -255,6 +255,49 @@ def test_run_starts_worker_that_processes_jobs_and_stops_it(monkeypatch, tmp_pat
     assert workers and workers[0]._thread is None  # stopped
 
 
+def test_run_recovers_running_jobs_before_the_worker_starts(monkeypatch, tmp_path, capsys):
+    from contextlib import closing
+    from app.core import submit as core_submit
+    from app.store import episodes
+
+    db.bootstrap(tmp_path)
+    with closing(db.connect(tmp_path)) as c:
+        core_submit.submit(c, "https://youtu.be/dQw4w9WgXcQ")
+        job = episodes.get_latest_job_with_steps(c, "dQw4w9WgXcQ")
+        episodes.set_job_state(c, job["id"], "running")
+        episodes.set_step_state(c, job["id"], "transcribe", "running")
+    _run_wiring(monkeypatch, tmp_path)
+    started = []
+    from app.worker import Worker
+    real_start = Worker.start
+    monkeypatch.setattr(Worker, "start",
+                        lambda self: (started.append(_job_state(tmp_path)), real_start(self)))
+    main.run()
+    assert started == ["queued"]            # already recovered when the worker starts
+    assert "Recovered 1 interrupted Job(s)" in capsys.readouterr().out
+
+
+def _job_state(data):
+    from contextlib import closing
+    from app.store import episodes
+    with closing(db.connect(data)) as c:
+        return episodes.get_latest_job_with_steps(c, "dQw4w9WgXcQ")["state"]
+
+
+@pytest.mark.parametrize("error", [sqlite3.OperationalError("locked"), RuntimeError("wal"),
+                                   OSError("disk")])
+def test_run_exits_cleanly_when_recovery_fails(monkeypatch, tmp_path, capsys, error):
+    def boom(conn, data_dir):
+        raise error
+
+    _run_wiring(monkeypatch, tmp_path)
+    monkeypatch.setattr(main, "recover", boom)
+    with pytest.raises(SystemExit) as e:
+        main.run()
+    assert e.value.code == 1
+    assert "Startup error" in capsys.readouterr().err
+
+
 def test_run_stops_worker_when_server_raises(monkeypatch, tmp_path):
     def serve(app, **kw):
         raise RuntimeError("server died")

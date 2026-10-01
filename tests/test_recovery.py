@@ -392,3 +392,65 @@ def test_config_defaults_and_values(tmp_path):
 def test_config_rejects_bad_retry(tmp_path, block):
     with pytest.raises(ConfigError):
         load_config(cfg(tmp_path, block))
+
+
+# ---- review patches ----------------------------------------------------------------------
+
+def test_from_config_passes_retry_to_every_real_adapter(tmp_path):
+    c = load_config(cfg(tmp_path, "[retry]\nmax_retries = 7\nbase_delay_seconds = 2\n"
+                                   "max_delay_seconds = 30\n"))
+    expected = Retry(7, 2.0, 30.0)
+    assert ant.AnthropicSummarizer.from_config(c).retry == expected
+    assert oa.OpenAIVerifier.from_config(c).retry == expected
+    assert aai.AssemblyAITranscriber.from_config(c).retry == expected
+
+
+def test_default_sleep_stops_at_once_when_shutdown_requested():
+    import time
+    from app.core import retry
+    retry.request_stop()
+    try:
+        started = time.monotonic()
+        with pytest.raises(retry.Stopping):
+            retry.stop_aware_sleep(30)
+        assert time.monotonic() - started < 1
+        calls = []
+
+        def fn():
+            calls.append(1)
+            raise ConnectionError("x")
+        with pytest.raises(retry.Stopping):
+            Retry(4, 5, 60).call(fn, lambda e: True)
+        assert calls == [1]            # no second attempt after the stop
+    finally:
+        retry.clear_stop()
+
+
+def test_stop_during_backoff_wait_leaves_job_running_and_returns_quickly(data):
+    import threading
+    import time
+    queue(data)
+    waiting = threading.Event()
+
+    class Slow:
+        def create(self, *a, **k):
+            waiting.set()
+            raise ant.Transient("HTTP 529")
+
+    summarizer = ant.AnthropicSummarizer(
+        "m", client_factory=lambda key: Slow(), environ={ant.KEY_VAR: "k"},
+        retry=Retry(4, 60, 60))
+    adapters = build_fakes()
+    from dataclasses import replace
+    adapters = replace(adapters, summarizer=summarizer)
+    w = Worker(data, adapters, poll_interval=0.05)
+    w.start()
+    assert waiting.wait(10)
+    time.sleep(0.2)                    # now inside the 60 s backoff wait
+    started = time.monotonic()
+    w.stop()
+    assert time.monotonic() - started < 3
+    assert w._thread is None
+    state, steps = states(data)
+    assert state == "running" and steps["summarize"] == "running"
+    assert do_recover(data) == 1

@@ -1,11 +1,36 @@
 """Retry with exponential backoff for brief network or vendor trouble (Story 3.1)."""
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable, TypeVar
 
 T = TypeVar("T")
+
+_STOP = threading.Event()
+
+
+class Stopping(BaseException):
+    """Raised inside a backoff wait when the app is shutting down.
+
+    Not an Exception on purpose: the pipeline must not record a failure, so the Job stays
+    `running` and is recovered at the next start.
+    """
+
+
+def request_stop() -> None:
+    _STOP.set()
+
+
+def clear_stop() -> None:
+    _STOP.clear()
+
+
+def stop_aware_sleep(seconds: float) -> None:
+    """Wait, but give up at once when shutdown is requested."""
+    if _STOP.wait(seconds):
+        raise Stopping()
 
 
 def call_with_backoff(fn: Callable[[], T], is_transient: Callable[[BaseException], bool],
@@ -32,7 +57,7 @@ class Retry:
     retries: int = 0
     base_delay: float = 5.0
     max_delay: float = 60.0
-    sleep: Callable[[float], None] = field(default=time.sleep, compare=False)
+    sleep: Callable[[float], None] = field(default=stop_aware_sleep, compare=False)
 
     @classmethod
     def from_config(cls, config) -> "Retry":

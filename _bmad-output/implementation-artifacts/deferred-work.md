@@ -24,3 +24,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-check-coverage-and-flag-low-scores.md`
   summary: Calibrate coverage: decide how strict "partial" should be, whether the ideas pass should list more than 15 ideas, and what threshold makes a flag useful.
   evidence: First real check gave coverage 0.60 (3 covered, 12 partial, 0 missing) for a faithful one-page summary of a 65 minute interview, so the 0.75 default flags nearly everything; Argentina and the youth-vote figures were never listed as ideas. Revisit once Verdicts (Story 2.5) show what the scores mean in practice.
+
+## Deferred from: code review of story-3.1 (2026-10-01)
+
+- Two app instances at once: the second start-up `recover()` resets a Job the first instance is running, and its worker can start it before the port bind fails (possible duplicate paid calls). Needs a single-instance lock. Unverified in practice; would be medium.
