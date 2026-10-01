@@ -35,30 +35,30 @@ project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 development_status:
-  epic-1: in-progress
-  1-1-start-the-app-with-one-command: review
-  1-2-submit-a-youtube-link: review
-  1-3-run-a-job-end-to-end-on-fake-providers: review
-  1-4-watch-a-job-s-progress: review
-  1-5-see-what-every-run-costs: review
-  1-6-download-audio: review
-  1-7-transcribe: review
-  1-8-generate-the-one-pager: review
-  1-9-handle-very-long-transcripts: review
-  1-10-browse-the-library-and-read-an-episode: review
-  1-11-first-supervised-real-run: review
+  epic-1: done
+  1-1-start-the-app-with-one-command: done
+  1-2-submit-a-youtube-link: done
+  1-3-run-a-job-end-to-end-on-fake-providers: done
+  1-4-watch-a-job-s-progress: done
+  1-5-see-what-every-run-costs: done
+  1-6-download-audio: done
+  1-7-transcribe: done
+  1-8-generate-the-one-pager: done
+  1-9-handle-very-long-transcripts: done
+  1-10-browse-the-library-and-read-an-episode: done
+  1-11-first-supervised-real-run: done
   epic-1-retrospective: optional
 
-  epic-2: in-progress
-  2-1-check-claims-against-the-transcript: review
-  2-2-check-coverage-of-the-main-ideas-and-flag-low-scores: review
-  2-3-prove-the-checker-catches-planted-errors: review
-  2-4-regenerate-a-one-pager-on-request: review
+  epic-2: done
+  2-1-check-claims-against-the-transcript: done
+  2-2-check-coverage-of-the-main-ideas-and-flag-low-scores: done
+  2-3-prove-the-checker-catches-planted-errors: done
+  2-4-regenerate-a-one-pager-on-request: done
   2-5-record-a-verdict: in-progress
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-recover-after-sleep-or-restart: backlog
+  epic-3: in-progress
+  3-1-recover-after-sleep-or-restart: ready-for-dev
   3-2-retry-a-failed-job: backlog
   3-3-refuse-a-submission-that-would-exceed-the-daily-cap: backlog
   3-4-pause-a-job-that-hits-the-cap-mid-run-and-resume-it-on-reque: backlog

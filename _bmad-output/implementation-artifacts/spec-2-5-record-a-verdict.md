@@ -2,7 +2,7 @@
 title: 'Story 2.5: Record a Verdict'
 type: 'feature'
 created: '2026-10-01'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'b216759'
 route: 'dispatch'
 review_loop_iteration: 0
