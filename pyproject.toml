@@ -11,6 +11,7 @@ dependencies = [
     "yt-dlp[default]==2026.8.19",
     "assemblyai==1.6.1",
     "anthropic==1.10.0",
+    "openai==3.22.1",
 ]
 
 [dependency-groups]

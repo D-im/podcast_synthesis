@@ -3,7 +3,6 @@
 <p>Status: <strong>{{ status.label }}</strong></p>
 <p>Submitted: {{ status.date }}</p>
 {% if status.verdict %}<p>Verdict: {{ status.verdict }}</p>
-{% endif %}{% if status.fidelity %}<p>Fidelity: {{ status.fidelity }}</p>
 {% endif %}<p>Spend: <strong>{{ status.spend.total }}</strong></p>
 {% if status.message %}<p>Error: {{ status.message }}</p>
 {% endif %}{% if status.transcript_ready %}<p><a href="/episodes/{{ episode.video_id }}/transcript">Transcript</a></p>
@@ -17,4 +16,18 @@
 {% for sec in status.one_pager.sections %}<h3>{{ sec.name }}</h3>
 <div class="one-pager-text" style="white-space: pre-wrap">{{ sec.text }}</div>
 {% endfor %}</section>
+{% endif %}{% if status.verification %}<section id="verification">
+<h2>Accuracy check (One-Pager v{{ status.verification.version }})</h2>
+<p>Accuracy: <strong>{{ status.verification.accuracy }}</strong> of {{ status.verification.checked }} claims checked</p>
+<p><small>This is an automated check by a second model and can be wrong.</small></p>
+{% if status.verification.unsupported %}<h3>Unsupported claims</h3>
+<ul>
+{% for u in status.verification.unsupported %}<li>[{{ u.section }}] {{ u.claim }}{% if u.note %} - {{ u.note }}{% endif %}</li>
+{% endfor %}</ul>
+{% else %}<p>No unsupported claims found.</p>
+{% endif %}</section>
+{% elif status.verification_skipped %}<section id="verification">
+<h2>Accuracy check</h2>
+<p>Skipped: {{ status.verification_skipped }}</p>
+</section>
 {% endif %}</div>

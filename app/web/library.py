@@ -1,6 +1,7 @@
 """Library list and plain-text search over Episodes. No HTTP here."""
 from __future__ import annotations
 
+import math
 import re
 import sqlite3
 from datetime import datetime
@@ -27,6 +28,16 @@ def local_datetime(created_at: str) -> str:
         return created_at or ""
 
 
+def percent(accuracy) -> str | None:
+    """0.8333 -> '83.3%'. None for anything that is not a number from 0 to 1."""
+    if isinstance(accuracy, bool) or not isinstance(accuracy, (int, float)):
+        return None
+    if not 0 <= accuracy <= 1:
+        return None
+    shown = math.floor(accuracy * 1000) / 10      # never rounds 99.99 up to 100
+    return f"{shown:g}%"
+
+
 def _row(item: dict, snippet: str | None = None) -> dict:
     status = describe_job(item, item.get("job"))
     return {
@@ -35,7 +46,7 @@ def _row(item: dict, snippet: str | None = None) -> dict:
         "date": local_datetime(item["created_at"]),
         "status": status["label"],
         "verdict": None,   # filled by Epic 2
-        "fidelity": None,  # filled by Epic 2
+        "fidelity": percent(item.get("fidelity_accuracy")),
         "snippet": snippet,
     }
 

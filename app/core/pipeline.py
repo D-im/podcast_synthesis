@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.core.meter import StepMeter
 from app.core.submit import STEP_NAMES
-from app.ports import Adapters, OnePager, StepError, Transcript
+from app.ports import Adapters, OnePager, StepError, StepSkipped, Transcript
 from app.store import artifacts, episodes
 
 MAX_MESSAGE = 500
@@ -17,8 +17,7 @@ ARTIFACT_FOR_STEP = {
     "download": artifacts.AUDIO,
     "transcribe": artifacts.TRANSCRIPT,
     "summarize": artifacts.ONE_PAGER,
-    "verify": artifacts.VERIFICATION,
-}
+}  # verify has no single file: its result is verification.v<N>.json per One-Pager version
 
 
 class StepResume:
@@ -60,13 +59,19 @@ def run_job(
             latest = episodes.latest_one_pager_version(conn, video_id)
             return latest is not None and artifacts.exists(
                 artifacts.one_pager_path(data_dir, video_id, latest["version"]))
+        if step == "verify":  # done only while the latest One-Pager version has its result
+            latest = episodes.latest_one_pager_version(conn, video_id)
+            score = episodes.latest_fidelity_score(conn, video_id)
+            return (latest is not None and artifacts.exists(
+                artifacts.verification_path(data_dir, video_id, latest["version"]))
+                and score is not None and score["version"] == latest["version"])
         return artifacts.exists(path(step))
 
     states = {s["name"]: s["state"] for s in episodes.get_steps(conn, job_id)}
     episodes.set_job_state(conn, job_id, "running")
 
     def run_step(name: str) -> None:
-        final = path(name)
+        final = path(name) if name in ARTIFACT_FOR_STEP else None
         meter = StepMeter(conn, video_id, name)
         if name == "download":
             with artifacts.atomic_target(final) as tmp:
@@ -103,9 +108,14 @@ def run_job(
             if not artifacts.exists(latest_path):
                 raise StepError("the latest One-Pager file is missing; run summarize again", True)
             one_pager = OnePager.from_dict(artifacts.read_json(latest_path))
+            result = adapters.verifier.verify(transcript, one_pager, meter)
+            version = latest["version"]
+            # file first, row second, like the One-Pager; earlier versions' files stay as they are
             artifacts.write_json(
-                final, adapters.verifier.verify(transcript, one_pager, meter).to_dict()
-            )
+                artifacts.verification_path(data_dir, video_id, version),
+                {"one_pager_version": version, **result.to_dict()})
+            episodes.add_fidelity_score(
+                conn, video_id, version, result.model, result.prompt_hashes, result.accuracy)
         else:
             raise RuntimeError(f"unknown step {name}")
 
@@ -122,6 +132,10 @@ def run_job(
         episodes.set_step_state(conn, job_id, name, "running")
         try:
             run_step(name)
+        except StepSkipped as e:
+            episodes.set_step_state(
+                conn, job_id, name, "skipped", sanitize(e.reason, secrets()))
+            continue
         except StepError as e:
             message, retryable = sanitize(e.message, secrets()), e.retryable
         except Exception as e:  # unexpected: class name only, never the text

@@ -15,7 +15,7 @@ from app.core import submit as core_submit
 from app.core.meter import format_usd, local_day_bounds_utc, to_micro
 from app.ports import OnePager, Transcript
 from app.store import artifacts, db, episodes, spend
-from app.web.library import build_library, local_datetime
+from app.web.library import build_library, local_datetime, percent
 from app.web.status import describe_job, describe_spend, format_timestamp
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -99,7 +99,9 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         except ValueError:
             pass
         status["verdict"] = None   # filled by Epic 2
-        status["fidelity"] = None  # filled by Epic 2
+        status["fidelity"] = None
+        status["verification"] = None
+        status["verification_skipped"] = None
         status["one_pager"] = None
         status["one_pager_error"] = None
         summarized = any(s["name"] == "summarize" and s["state"] == "done"
@@ -118,7 +120,31 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         elif summarized:
             status["one_pager_error"] = "No One-Pager version is recorded for this episode."
 
+        if latest is not None:  # advisory only: nothing here may touch the One-Pager above
+            status["verification"] = read_verification(video_id, latest["version"])
+            if status["verification"] is not None:
+                status["fidelity"] = status["verification"]["accuracy"]
+        verify_step = next((s for s in (job or {}).get("steps", [])
+                            if s["name"] == "verify"), None)
+        if (status["verification"] is None and verify_step is not None
+                and verify_step["state"] == "skipped" and verify_step.get("message")):
+            status["verification_skipped"] = verify_step["message"]
+
         return episode, status
+
+    def read_verification(video_id: str, version: int) -> dict | None:
+        try:
+            data = artifacts.read_json(artifacts.verification_path(data_dir, video_id, version))
+            pct = percent(data["accuracy"])
+            if pct is None:
+                return None
+            unsupported = [
+                {"section": str(u["section"]), "claim": str(u["claim"]), "note": str(u["note"])}
+                for u in data["unsupported_claims"]]
+            return {"version": version, "accuracy": pct, "checked": len(data["claims"]),
+                    "unsupported": unsupported}
+        except (ValueError, OSError, KeyError, TypeError, RecursionError):
+            return None
 
     @app.get("/episodes/{video_id}", response_class=HTMLResponse)
     def episode_page(request: Request, video_id: str):

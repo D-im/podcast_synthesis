@@ -27,7 +27,7 @@ def build_adapters(config: Config, behavior: fakes.FakeBehavior | None = None) -
         raise ValueError(f"provider '{p['transcriber']}' for transcriber is not available yet")
     if p["summarizer"] not in ("fake", "anthropic"):
         raise ValueError(f"provider '{p['summarizer']}' for summarizer is not available yet")
-    if p["verifier"] not in ("fake", "none"):
+    if p["verifier"] not in ("fake", "none", "openai"):
         raise ValueError(f"provider '{p['verifier']}' for verifier is not available yet")
     adapters = fakes.build_fakes(behavior, verifier=p["verifier"] == "fake")
     if p["downloader"] == "yt-dlp":
@@ -42,6 +42,10 @@ def build_adapters(config: Config, behavior: fakes.FakeBehavior | None = None) -
         from app.adapters.anthropic import AnthropicSummarizer
 
         adapters = replace(adapters, summarizer=AnthropicSummarizer.from_config(config))
+    if p["verifier"] == "openai":
+        from app.adapters.openai import OpenAIVerifier
+
+        adapters = replace(adapters, verifier=OpenAIVerifier.from_config(config))
     return adapters
 
 

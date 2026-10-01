@@ -11,7 +11,6 @@ from typing import Any, Iterator
 AUDIO = "audio.m4a"
 TRANSCRIPT = "transcript.json"
 ONE_PAGER = "one_pager.json"  # legacy unversioned name; new runs write one_pager.v<N>.json
-VERIFICATION = "verification.json"
 
 
 _SAFE_ID = re.compile(r"[A-Za-z0-9_-]+")
@@ -80,6 +79,11 @@ def write_json(final: Path, obj: Any) -> None:
 def read_json(path: Path) -> Any:
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def verification_path(data_dir: Path, video_id: str, version: int) -> Path:
+    """The check result for One-Pager version N, next to that version's file."""
+    return artifact_path(data_dir, video_id, f"verification.v{int(version)}.json")
 
 
 _ONE_PAGER_FILE = re.compile(r"one_pager\.v(\d+)\.json")

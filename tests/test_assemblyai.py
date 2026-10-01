@@ -284,7 +284,7 @@ def test_upgrade_from_populated_v3(tmp_path):
     conn.close()
     db.bootstrap(tmp_path)
     with closing(db.connect(tmp_path)) as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 6
         assert c.execute("select amount_micro_usd, provider_ref from spend_ledger"
                          ).fetchall() == [(7, None)]
 
@@ -766,9 +766,9 @@ def test_from_config_passes_the_upload_settings(tmp_path):
     assert t.compress_before_upload is False and t.upload_bitrate_kbps == 24
 
 
-def test_shipped_config_builds_real_adapters_with_no_verifier():
+def test_shipped_config_builds_real_adapters():
     adapters = build_adapters(load_config())
     assert type(adapters.transcriber).__name__ == "AssemblyAITranscriber"
     assert type(adapters.summarizer).__name__ == "AnthropicSummarizer"
     assert type(adapters.downloader).__name__ == "YtDlpDownloader"
-    assert adapters.verifier is None
+    assert type(adapters.verifier).__name__ == "OpenAIVerifier"

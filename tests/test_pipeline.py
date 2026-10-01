@@ -61,7 +61,7 @@ def test_happy_path(data):
     assert j["state"] == "done"
     assert states(j) == {s: "done" for s in STEPS}
     assert files(data) == sorted(["audio.m4a", "transcript.json", "one_pager.v1.json",
-                                  "verification.json"])
+                                  "verification.v1.json"])
     with closing(db.connect(data)) as c:
         ep = episodes.get_episode(c, VID)
     assert ep["title"] == f"Fake episode {VID}" and ep["duration_seconds"] == 3600

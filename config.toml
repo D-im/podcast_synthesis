@@ -6,7 +6,7 @@ token_limit = 150000
 downloader = "yt-dlp"    # or "fake"
 transcriber = "assemblyai"   # or "fake"
 summarizer = "anthropic"     # or "fake"
-verifier = "none"            # "none" until the real Verifier arrives (Epic 2); or "fake"
+verifier = "openai"          # "openai", "none" (skip the check) or "fake"; never the summarizer's vendor
 
 [ytdlp]
 js_runtime = "node"   # "node" or "deno"
@@ -28,10 +28,16 @@ max_output_tokens = 4096
 map_chunk_tokens = 60000
 map_output_tokens = 4096
 
+[openai]
+max_input_tokens = 250000   # skip the check above this (estimate: 1 token per 3 characters)
+max_output_tokens = 16000
+
 [pricing]
 transcription_usd_per_hour = 0.23   # includes speaker labels
 summarizer_input_usd_per_million = 2.0
 summarizer_output_usd_per_million = 10.0
+verifier_input_usd_per_million = 2.0
+verifier_output_usd_per_million = 10.0
 
 [fidelity]
 accuracy_threshold = 0.9

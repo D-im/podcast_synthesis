@@ -35,9 +35,14 @@ class Config:
     map_output_tokens: int = 4096
     compress_before_upload: bool = True
     upload_bitrate_kbps: int = 32
+    verifier_input_usd_per_million: float = 2.0
+    verifier_output_usd_per_million: float = 10.0
+    openai_max_input_tokens: int = 250000
+    openai_max_output_tokens: int = 16000
 
 
 JS_RUNTIMES = ("node", "deno")
+NO_VENDOR = ("fake", "none")  # not real vendors, so the same-vendor rule does not apply
 
 
 def _num(data: dict, key: str, path: Path, kinds=(int, float)):
@@ -142,6 +147,25 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
                         allow_zero=True)
     out_rate = _positive(pricing, "summarizer_output_usd_per_million", 10.0, "pricing", path,
                          allow_zero=True)
+    ver_in = _positive(pricing, "verifier_input_usd_per_million", 2.0, "pricing", path,
+                       allow_zero=True)
+    ver_out = _positive(pricing, "verifier_output_usd_per_million", 10.0, "pricing", path,
+                        allow_zero=True)
+    oai = _optional_table(data, "openai", path)
+    oai_in = oai.get("max_input_tokens", 250000)
+    if isinstance(oai_in, bool) or not isinstance(oai_in, int) or oai_in <= 0:
+        raise ConfigError(f"{path}: [openai] 'max_input_tokens' must be a positive integer")
+    oai_out = oai.get("max_output_tokens", 16000)
+    if isinstance(oai_out, bool) or not isinstance(oai_out, int) or not 0 < oai_out <= 100000:
+        raise ConfigError(
+            f"{path}: [openai] 'max_output_tokens' must be an integer from 1 to 100000")
+    providers = _str_table(data, "providers", path)
+    # AD-13: the checker must come from a different vendor than the writer
+    v_norm, s_norm = providers["verifier"].strip().lower(), providers["summarizer"].strip().lower()
+    if v_norm == s_norm and v_norm not in NO_VENDOR:
+        raise ConfigError(
+            f"{path}: [providers] the verifier and the summarizer are both "
+            f"'{providers['verifier']}'; the checker must be a different vendor than the writer")
     anth = _optional_table(data, "anthropic", path)
     max_out = anth.get("max_output_tokens", 4096)
     if isinstance(max_out, bool) or not isinstance(max_out, int) or not 0 < max_out <= 16384:
@@ -170,7 +194,11 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
         port=port,
         daily_cap_usd=cap,
         token_limit=limit,
-        providers=_str_table(data, "providers", path),
+        verifier_input_usd_per_million=ver_in,
+        verifier_output_usd_per_million=ver_out,
+        openai_max_input_tokens=oai_in,
+        openai_max_output_tokens=oai_out,
+        providers=providers,
         models=_str_table(data, "models", path, MODEL_ROLES),
         accuracy_threshold=acc,
         coverage_threshold=cov,

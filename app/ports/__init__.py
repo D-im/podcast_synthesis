@@ -15,6 +15,15 @@ class StepError(Exception):
         self.retryable = retryable
 
 
+class StepSkipped(Exception):
+    """A step chose not to run (for example input too long). The pipeline records it as
+    `skipped` with this reason, and the Job carries on. The reason must hold no secrets or text."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
 @dataclass(frozen=True)
 class DownloadResult:
     title: str
@@ -74,18 +83,48 @@ class OnePager:
 
 
 @dataclass(frozen=True)
+class Claim:
+    section: str
+    claim: str
+    verdict: str          # "supported" or "unsupported" (after the evidence check)
+    evidence: str
+    note: str
+    evidence_found: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class UnsupportedClaim:
+    section: str
+    claim: str
+    note: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class VerificationResult:
     accuracy: float
-    coverage: float
-    unsupported_claims: tuple[str, ...]
-    missed_ideas: tuple[str, ...]
+    coverage: float | None = None   # None until the coverage check exists (Story 2.2)
+    unsupported_claims: tuple[UnsupportedClaim, ...] = ()
+    missed_ideas: tuple[str, ...] = ()
+    claims: tuple[Claim, ...] = ()
+    model: str = ""
+    prompt_hashes: dict[str, str] = field(default_factory=dict)  # prompt name -> SHA-256
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "accuracy": self.accuracy,
             "coverage": self.coverage,
-            "unsupported_claims": list(self.unsupported_claims),
+            "claims": [c.to_dict() for c in self.claims],
+            "unsupported_claims": [
+                u.to_dict() if hasattr(u, "to_dict") else u for u in self.unsupported_claims],
             "missed_ideas": list(self.missed_ideas),
+            "model": self.model,
+            "prompt_hashes": dict(self.prompt_hashes),
         }
 
 

@@ -23,8 +23,8 @@ def test_fresh_start_creates_wal_db(tmp_path):
     tables = sqlite3.connect(p).execute(
         "select name from sqlite_master where type='table' order by name"
     ).fetchall()
-    assert tables == [("episodes",), ("jobs",), ("one_pager_versions",), ("spend_ledger",),
-                      ("steps",)]
+    assert tables == [("episodes",), ("fidelity_scores",), ("jobs",), ("one_pager_versions",),
+                      ("spend_ledger",), ("steps",)]
     assert TestClient(create_app([], tmp_path)).get("/").status_code == 200
 
 
@@ -132,7 +132,7 @@ def _config_text(**over):
         ("token_limit = 150000", "token_limit = 0", "token_limit"),
         ("accuracy_threshold = 0.9", "accuracy_threshold = 1.5", "accuracy_threshold"),
         ("coverage_threshold = 0.75", "coverage_threshold = -0.1", "coverage_threshold"),
-        ('verifier = "none"', "", "verifier"),
+        ('verifier = "openai"', "", "verifier"),
         ('downloader = "yt-dlp"', "", "downloader"),
         ('js_runtime = "node"', 'js_runtime = "bun"', "js_runtime"),
         ('js_runtime = "node"', "", "js_runtime"),
@@ -267,7 +267,7 @@ def test_run_stops_worker_when_server_raises(monkeypatch, tmp_path):
 
 def test_run_exits_with_message_for_unavailable_provider(monkeypatch, tmp_path, capsys):
     bad = tmp_path / "config.toml"
-    bad.write_text(FAKE.read_text().replace('verifier = "fake"', 'verifier = "openai"'))
+    bad.write_text(FAKE.read_text().replace('verifier = "fake"', 'verifier = "gemini"'))
     _run_wiring(monkeypatch, tmp_path, config_path=bad)
     with pytest.raises(SystemExit) as e:
         main.run()

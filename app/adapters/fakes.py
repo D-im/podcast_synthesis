@@ -90,7 +90,7 @@ class FakeVerifier:
         self.b.enter("verify")
         self.b.charge(meter)
         self.b.maybe_fail("verify")
-        return VerificationResult(1.0, 1.0, (), ())
+        return VerificationResult(1.0, None, (), (), (), model="fake")
 
 
 def build_fakes(behavior: FakeBehavior | None = None, verifier: bool = True) -> Adapters:

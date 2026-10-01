@@ -69,6 +69,18 @@ MIGRATIONS: list[list[str]] = [
             PRIMARY KEY (video_id, version)
         )""",
     ],
+    # 6: advisory accuracy score per Episode and One-Pager version (Story 2.1)
+    [
+        """CREATE TABLE fidelity_scores (
+            video_id TEXT NOT NULL REFERENCES episodes(video_id),
+            version INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            model TEXT NOT NULL,
+            prompt_hashes TEXT NOT NULL,
+            accuracy REAL NOT NULL,
+            PRIMARY KEY (video_id, version)
+        )""",
+    ],
 ]
 
 
