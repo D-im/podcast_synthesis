@@ -21,7 +21,7 @@ class Rejected:
 def validate(rating: str | None, reason: str | None) -> Clean | Rejected:
     if rating not in RATINGS:
         return Rejected("Choose worth it or not worth it.")
-    text = (reason or "").strip()
+    text = (reason or "").replace("\r\n", "\n").replace("\r", "\n").strip()
     if not text:
         return Rejected("Give a reason for the Verdict.")
     if len(text) > MAX_REASON:

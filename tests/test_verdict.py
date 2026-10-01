@@ -1,3 +1,4 @@
+import sqlite3
 from contextlib import closing
 from pathlib import Path
 
@@ -85,12 +86,14 @@ def test_bad_rating_rejected(data, rating):
     done_episode(data)
     r = post(client(data), rating, "x")
     assert r.status_code == 400 and "Choose worth it" in r.text and verdicts(data) == []
+    assert ">x</textarea>" in r.text   # typed reason kept
 
 
 def test_too_long_reason_rejected_and_kept(data):
     done_episode(data)
     r = post(client(data), reason="y" * 5001)
     assert r.status_code == 400 and "too long" in r.text and verdicts(data) == []
+    assert "y" * 5001 in r.text   # typed reason kept
     assert post(client(data), reason="y" * 5000).status_code == 303
 
 
@@ -161,7 +164,7 @@ def test_foreign_key_blocks_missing_version(data):
     done_episode(data)
     with closing(db.connect(data)) as c:
         assert episodes.add_verdict(c, VID, 9, "worth_it", "x") is None
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.IntegrityError):
             c.execute("INSERT INTO verdicts (video_id, version, rating, reason, created_at) "
                       "VALUES (?, 9, 'worth_it', 'x', 't')", (VID,))
 
@@ -179,7 +182,6 @@ def test_form_survives_polling_fragment(data):
 
 
 def test_migration_from_schema_7(tmp_path):
-    import sqlite3
     from app.store import migrations
     p = tmp_path / "x.db"
     conn = sqlite3.connect(p, isolation_level=None)
@@ -192,3 +194,26 @@ def test_migration_from_schema_7(tmp_path):
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
     assert conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0] == 1
     assert conn.execute("SELECT COUNT(*) FROM verdicts").fetchone()[0] == 0
+
+
+def test_rejected_stale_form_keeps_posted_version(data):
+    done_episode(data)
+    add_version(data)
+    r = post(client(data), "worth_it", "", version="1")
+    assert r.status_code == 400
+    assert "This rates One-Pager v1." in r.text
+    assert 'name="version" value="1"' in r.text
+    assert verdicts(data) == []
+
+
+def test_rejected_unknown_version_falls_back_to_latest(data):
+    done_episode(data)
+    r = post(client(data), "worth_it", "", version="99")
+    assert "This rates One-Pager v1." in r.text
+
+
+def test_crlf_counts_as_one_character(data):
+    done_episode(data)
+    reason = "\r\n".join(["a" * 49] * 100)   # 100 lines: 4900 + 99 newlines, 5000 with CRLF counted as one
+    assert post(client(data), reason=reason).status_code == 303
+    assert "\r" not in verdicts(data)[0]["reason"]

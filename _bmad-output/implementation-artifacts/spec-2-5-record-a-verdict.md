@@ -2,7 +2,7 @@
 title: 'Story 2.5: Record a Verdict'
 type: 'feature'
 created: '2026-10-01'
-status: 'done'
+status: 'in-progress'
 baseline_commit: 'b216759'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -85,4 +85,23 @@ context:
 
 - Built as specified: migration 8 (`verdicts`), `episodes.add_verdict` / `list_verdicts`, `app/core/verdict.py`, `POST /episodes/{id}/verdict`, Verdict section and library display, `tests/test_verdict.py`.
 - Judgment calls: the Verdict section is in its own template (`_verdict.html`) outside the polled status fragment, so the 3-second refresh cannot wipe a reason being typed. Schema-version assertions in older tests moved from 7 to 8, and the startup table list gained `verdicts` and `sqlite_sequence`.
-- Not done: no code-review pass yet; story is in `review`.
+- Review patches applied: a rejected submit keeps the form on the version posted (when it exists); CRLF is normalised before the length check; tests added for kept text, stale rejected form, CRLF; FK test uses `sqlite3.IntegrityError`.
+
+### Review Findings
+
+- [x] [Review][Patch] Rejected stale-form POST re-renders the form for the latest version, not the version posted; the typed text silently moves to another version (and a bad-rating+bad-version submit then succeeds on the wrong version) [app/web/app.py:verdict_post, app/web/templates/_verdict.html]
+- [x] [Review][Patch] Browsers submit textarea newlines as CRLF while `maxlength` counts them as one, so a reason the form accepts can exceed 5000 chars server-side and be rejected; normalise CRLF to LF before the length check [app/core/verdict.py:validate]
+- [x] [Review][Patch] No test shows a rejected Verdict keeps the typed reason (too-long and bad-rating cases assert no kept text; empty-reason case cannot) [tests/test_verdict.py:90]
+- [x] [Review][Patch] `test_foreign_key_blocks_missing_version` uses `pytest.raises(Exception)`; should be `sqlite3.IntegrityError` [tests/test_verdict.py:164]
+
+#### Rejected
+
+- Missing imports in app.py (`re`, `parse_qs`, `sqlite3`, `HTTPException`, `RedirectResponse`, `run_in_threadpool`) — false: all imported at the top of the file.
+- `BEGIN IMMEDIATE` assumes autocommit — false: `db.connect` sets `isolation_level=None` and `foreign_keys=ON` (app/store/db.py:20-23).
+- 404 missing when the episode is None on the rejection path — false: `work()` already raises 404 before any rejection, and there is no delete feature.
+- Library search results may lack the Verdict — false: the search path also builds rows from `episodes.list_episodes`.
+- Double-submit stores duplicate Verdicts — low: the fix adds a time-window guard; not worth the complexity.
+- Page wording "(an earlier version; the latest is v2)" vs the spec's example; older Verdicts do not name the latest — low: wording only, same information.
+- Spec status says `done` while Tasks are unchecked and sprint-status says `review` — rejected: the fix is to edit the spec; status is set by this workflow's final step.
+- `test_bad_version_rejected` does not assert the message; library test does not assert on VID2's row — low: cosmetic test strength.
+- Radios lack `required`/`<fieldset>`, no CSRF protection, per-row import in `_verdict_text` — low or out of scope for a localhost single-user app.

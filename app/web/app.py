@@ -233,6 +233,17 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
         episode, status = await run_in_threadpool(load, video_id)
         status["verdict_error"] = error
         status["verdict_draft"] = {"rating": rating, "reason": reason}
+        if re.fullmatch(r"[1-9][0-9]{0,8}", raw_version) and status["verdict_form"]:
+            def exists():
+                with closing(db.connect(data_dir)) as conn:
+                    return any(v["version"] == int(raw_version)
+                               for v in episodes.list_one_pager_versions(conn, video_id))
+            try:
+                if await run_in_threadpool(exists):
+                    # keep the typed text on the version it was written for
+                    status["verdict_form"] = {"version": int(raw_version)}
+            except (sqlite3.Error, OSError):
+                pass
         return TEMPLATES.TemplateResponse(
             request, "episode.html",
             {"episode": episode, "status": status, "today_spend": today_spend()},
