@@ -98,6 +98,10 @@ MIGRATIONS: list[list[str]] = [
         )""",
         "CREATE INDEX verdicts_episode ON verdicts(video_id, id)",
     ],
+    # 9: how many times each step has started (Story 3.2)
+    [
+        "ALTER TABLE steps ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0",
+    ],
 ]
 
 

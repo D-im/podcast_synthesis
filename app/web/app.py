@@ -202,6 +202,34 @@ def create_app(warnings: list[str], data_dir: Path = db.DEFAULT_DATA_DIR,
             {"episode": episode, "status": status, "today_spend": today_spend()},
         )
 
+    RETRY_MESSAGES = {
+        "no_job": "This Episode has no failed Job to retry.",
+        "not_failed": "This Episode has no failed Job to retry.",
+        "not_retryable": "This failure cannot be retried.",
+        "active": "This Episode already has a Job waiting or running.",
+    }
+
+    @app.post("/episodes/{video_id}/retry")
+    async def retry_post(request: Request, video_id: str):
+        def work():
+            with closing(db.connect(data_dir)) as conn:
+                return episodes.retry_failed_job(conn, video_id)
+
+        try:
+            outcome = await run_in_threadpool(work)
+        except (sqlite3.Error, OSError):
+            raise HTTPException(status_code=503,
+                                detail="The database is unavailable just now") from None
+        if outcome == "queued":
+            return RedirectResponse(f"/episodes/{video_id}", status_code=303)
+        if outcome == "no_episode":
+            raise HTTPException(status_code=404, detail="Episode not found")
+        episode, status = await run_in_threadpool(load, video_id)
+        return TEMPLATES.TemplateResponse(
+            request, "episode.html",
+            {"episode": episode, "status": status, "today_spend": today_spend(),
+             "retry_notice": RETRY_MESSAGES[outcome]}, status_code=409)
+
     @app.post("/episodes/{video_id}/verdict")
     async def verdict_post(request: Request, video_id: str):
         body = (await request.body()).decode("utf-8", errors="replace")

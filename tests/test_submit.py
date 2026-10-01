@@ -164,12 +164,12 @@ def test_connection_pragmas(tmp_path):
 def test_migrations_idempotent_and_keep_data(tmp_path):
     db.bootstrap(tmp_path)
     c = db.connect(tmp_path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 8
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 9
     episodes.create_episode_with_job(c, VID, "u", ["download"])
     c.close()
     db.bootstrap(tmp_path)
     c = db.connect(tmp_path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 8
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 9
     assert c.execute("select count(*) from episodes").fetchone()[0] == 1
     c.close()
 
@@ -246,4 +246,4 @@ def test_migration_2_upgrades_populated_v1_database(tmp_path):
     job = episodes.get_latest_job_with_steps(conn, "v")
     conn.close()
     assert job["steps"] == [{"name": "download", "ordinal": 1, "state": "pending",
-                             "message": None, "retryable": None}]
+                             "message": None, "retryable": None, "attempts": 0}]

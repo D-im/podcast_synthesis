@@ -326,7 +326,7 @@ def test_upgrade_from_populated_v4(tmp_path):
     conn.close()
     db.bootstrap(tmp_path)
     with closing(db.connect(tmp_path)) as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 9
         assert c.execute("select amount_micro_usd from spend_ledger").fetchall() == [(7,)]
         assert c.execute("select count(*) from one_pager_versions").fetchone()[0] == 0
 

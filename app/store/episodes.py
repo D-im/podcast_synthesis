@@ -72,7 +72,7 @@ def get_latest_job_with_steps(conn: sqlite3.Connection, video_id: str) -> dict |
     if job is None:
         return None
     steps = conn.execute(
-        "SELECT name, ordinal, state, message, retryable FROM steps "
+        "SELECT name, ordinal, state, message, retryable, attempts FROM steps "
         "WHERE job_id = ? ORDER BY ordinal",
         (job[0],),
     ).fetchall()
@@ -82,8 +82,8 @@ def get_latest_job_with_steps(conn: sqlite3.Connection, video_id: str) -> dict |
         "created_at": job[2],
         "updated_at": job[3],
         "steps": [
-            {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r}
-            for n, o, s, m, r in steps
+            {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r, "attempts": a}
+            for n, o, s, m, r, a in steps
         ],
     }
 
@@ -107,13 +107,13 @@ def set_job_state(conn: sqlite3.Connection, job_id: int, state: str) -> None:
 
 def get_steps(conn: sqlite3.Connection, job_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT name, ordinal, state, message, retryable FROM steps "
+        "SELECT name, ordinal, state, message, retryable, attempts FROM steps "
         "WHERE job_id = ? ORDER BY ordinal",
         (job_id,),
     ).fetchall()
     return [
-        {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r}
-        for n, o, s, m, r in rows
+        {"name": n, "ordinal": o, "state": s, "message": m, "retryable": r, "attempts": a}
+        for n, o, s, m, r, a in rows
     ]
 
 
@@ -122,9 +122,10 @@ def set_step_state(
     message: str | None = None, retryable: bool | None = None,
 ) -> None:
     conn.execute(
-        "UPDATE steps SET state = ?, message = ?, retryable = ? "
-        "WHERE job_id = ? AND name = ?",
-        (state, message, None if retryable is None else int(retryable), job_id, name),
+        "UPDATE steps SET state = ?, message = ?, retryable = ?, "
+        "attempts = attempts + ? WHERE job_id = ? AND name = ?",
+        (state, message, None if retryable is None else int(retryable),
+         1 if state == "running" else 0, job_id, name),
     )
 
 
@@ -347,3 +348,43 @@ def list_verdicts(conn: sqlite3.Connection, video_id: str) -> list[dict]:
         "WHERE video_id = ? ORDER BY id DESC", (video_id,)).fetchall()
     return [{"id": r[0], "version": r[1], "rating": r[2], "reason": r[3], "created_at": r[4]}
             for r in rows]
+
+
+def retry_failed_job(conn: sqlite3.Connection, video_id: str) -> str:
+    """Requeue the Episode's latest failed Job from its retryable failed step, atomically.
+
+    Returns `queued`, or why nothing was written: `no_episode`, `no_job`, `not_failed`,
+    `not_retryable`, `active`.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        outcome = "queued"
+        job = None
+        if get_episode(conn, video_id) is None:
+            outcome = "no_episode"
+        else:
+            job = get_latest_job_with_steps(conn, video_id)
+            if job is None:
+                outcome = "no_job"
+            elif has_active_job(conn, video_id):
+                outcome = "active"
+            elif job["state"] != "failed":
+                outcome = "not_failed"
+            else:
+                failed = next((s for s in job["steps"] if s["state"] == "failed"), None)
+                if failed is None or failed["retryable"] != 1:
+                    outcome = "not_retryable"
+        if outcome != "queued":
+            conn.execute("ROLLBACK")
+            return outcome
+        conn.execute(
+            "UPDATE steps SET state = 'pending', message = NULL, retryable = NULL "
+            "WHERE job_id = ? AND name = ?", (job["id"], failed["name"]))
+        conn.execute("UPDATE jobs SET state = 'queued', updated_at = ? WHERE id = ?",
+                     (_now(), job["id"]))
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    return "queued"

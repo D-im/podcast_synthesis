@@ -4,6 +4,10 @@
 <p>Submitted: {{ status.date }}</p>
 <p>Spend: <strong>{{ status.spend.total }}</strong></p>
 {% if status.message %}<p>Error: {{ status.message }}</p>
+{% endif %}{% if status.failed_step %}<p>Failed step: {{ status.failed_step }}. Attempts: {{ status.attempts }}</p>
+{% if status.retryable %}<form method="post" action="/episodes/{{ episode.video_id }}/retry"><button type="submit">Retry</button></form>
+{% else %}<p>This failure is permanent, so retrying would fail the same way. It usually needs a different link or a changed setting.</p>
+{% endif %}{% endif %}{% if retry_notice %}<p role="alert">{{ retry_notice }}</p>
 {% endif %}{% if status.transcript_ready %}<p><a href="/episodes/{{ episode.video_id }}/transcript">Transcript</a></p>
 {% endif %}{% if status.can_regenerate %}<p><a href="/episodes/{{ episode.video_id }}/regenerate">Regenerate</a></p>
 {% endif %}{% if status.audio_ready %}<p><audio controls preload="none" src="/episodes/{{ episode.video_id }}/audio"></audio> <a href="/episodes/{{ episode.video_id }}/audio" download>Download audio</a></p>

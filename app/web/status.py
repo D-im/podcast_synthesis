@@ -26,12 +26,14 @@ def describe_job(episode: dict, job: dict | None, spend: dict | None = None) -> 
     title = episode.get("title") or episode["video_id"]
     if job is None:
         return {"title": title, "label": "No job", "polling": False, "failed_step": None,
-                "message": None, "steps": [], "state": None, "spend": spend}
+                "retryable": False, "attempts": 0, "message": None, "steps": [], "state": None, "spend": spend}
     steps = sorted(job["steps"], key=lambda s: STEP_NAMES.index(s["name"])
                    if s["name"] in STEP_NAMES else len(STEP_NAMES))
     state = job["state"]
     failed = next((s for s in steps if s["state"] == "failed"), None)
     message = None
+    retryable = False
+    attempts = 0
     if state == "queued":
         label = "Queued"
     elif state == "running":
@@ -43,6 +45,9 @@ def describe_job(episode: dict, job: dict | None, spend: dict | None = None) -> 
     elif state == "failed":
         label = f"Failed at {failed['name']}" if failed else "Failed"
         message = failed.get("message") if failed else None
+        if failed:
+            retryable = failed.get("retryable") == 1
+            attempts = max(1, failed.get("attempts") or 0)
     else:
         label = state.capitalize()
     return {
@@ -52,6 +57,8 @@ def describe_job(episode: dict, job: dict | None, spend: dict | None = None) -> 
         "polling": state in POLLING_STATES,
         "failed_step": failed["name"] if failed else None,
         "message": message,
+        "retryable": retryable,
+        "attempts": attempts,
         "spend": spend,
         "transcript_ready": any(s["name"] == "transcribe" and s["state"] == "done"
                                 for s in steps),
